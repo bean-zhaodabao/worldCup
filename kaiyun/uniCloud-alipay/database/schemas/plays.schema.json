@@ -1,0 +1,40 @@
+{
+  "bsonType": "object",
+  "required": ["matchId", "categoryId", "name", "odds"],
+  "properties": {
+    "_id": { "bsonType": "string" },
+    "matchId": {
+      "bsonType": "string",
+      "title": "关联赛事ID",
+      "foreignKey": "matches._id"
+    },
+    "categoryId": {
+      "bsonType": "string",
+      "title": "关联玩法小类ID",
+      "foreignKey": "play-categories._id"
+    },
+    "name": {
+      "bsonType": "string",
+      "title": "玩法名称",
+      "description": "例如: 0-1、2-3、胜、平、负"
+    },
+    "label": {
+      "bsonType": "string",
+      "title": "玩法标识",
+      "description": "简短标识，如 total_0_1"
+    },
+    "odds": {
+      "bsonType": "double",
+      "title": "赔率",
+      "minimum": 1.01
+    },
+    "isWin": {
+      "bsonType": "bool",
+      "title": "是否中奖",
+      "description": "管理员手动设定",
+      "default": false
+    },
+    "createTime": { "bsonType": "date" },
+    "updateTime": { "bsonType": "date" }
+  }
+}

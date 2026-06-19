@@ -1,0 +1,33 @@
+{
+  "bsonType": "object",
+  "required": ["username", "password"],
+  "properties": {
+    "_id": { "bsonType": "string" },
+    "username": {
+      "bsonType": "string",
+      "title": "用户名",
+      "description": "登录用户名，管理员手动创建"
+    },
+    "password": {
+      "bsonType": "string",
+      "title": "密码",
+      "description": "加密存储的密码"
+    },
+    "role": {
+      "bsonType": "string",
+      "title": "角色",
+      "enum": ["user", "admin"],
+      "default": "user"
+    },
+    "status": {
+      "bsonType": "string",
+      "title": "状态",
+      "enum": ["active", "disabled"],
+      "default": "active"
+    },
+    "createTime": {
+      "bsonType": "date",
+      "title": "创建时间"
+    }
+  }
+}

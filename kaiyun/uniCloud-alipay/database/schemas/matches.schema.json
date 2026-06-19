@@ -1,0 +1,44 @@
+{
+  "bsonType": "object",
+  "required": ["name", "teamA", "teamB", "startTime"],
+  "properties": {
+    "_id": { "bsonType": "string" },
+    "name": {
+      "bsonType": "string",
+      "title": "赛事名称",
+      "description": "例如: 世界杯小组赛A组第1轮"
+    },
+    "teamA": {
+      "bsonType": "string",
+      "title": "主队名称",
+      "description": "例如: 美国"
+    },
+    "teamB": {
+      "bsonType": "string",
+      "title": "客队名称",
+      "description": "例如: 澳大利亚"
+    },
+    "teamAFlag": {
+      "bsonType": "string",
+      "title": "主队国旗图片URL"
+    },
+    "teamBFlag": {
+      "bsonType": "string",
+      "title": "客队国旗图片URL"
+    },
+    "startTime": {
+      "bsonType": "date",
+      "title": "开始时间",
+      "description": "赛事开始时间，也是下注截止时间"
+    },
+    "status": {
+      "bsonType": "string",
+      "title": "赛事状态",
+      "enum": ["upcoming", "live", "finished", "settled"],
+      "description": "未开始->进行中->已结束->已结算",
+      "default": "upcoming"
+    },
+    "createTime": { "bsonType": "date" },
+    "updateTime": { "bsonType": "date" }
+  }
+}

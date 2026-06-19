@@ -1,0 +1,52 @@
+{
+  "bsonType": "object",
+  "required": ["orderNo", "userId", "matchId", "betAmount", "totalOdds"],
+  "properties": {
+    "_id": { "bsonType": "string" },
+    "orderNo": {
+      "bsonType": "string",
+      "title": "订单编号",
+      "description": "唯一订单号"
+    },
+    "userId": {
+      "bsonType": "string",
+      "title": "用户ID",
+      "foreignKey": "users._id"
+    },
+    "matchId": {
+      "bsonType": "string",
+      "title": "赛事ID",
+      "foreignKey": "matches._id"
+    },
+    "betAmount": {
+      "bsonType": "double",
+      "title": "下注金额",
+      "minimum": 0
+    },
+    "totalOdds": {
+      "bsonType": "double",
+      "title": "总赔率",
+      "description": "串关时 = 各玩法赔率乘积；单玩 = 该玩法赔率"
+    },
+    "winAmount": {
+      "bsonType": "double",
+      "title": "中奖金额",
+      "description": "下注额 * 总赔率（中奖时计算）",
+      "default": 0
+    },
+    "status": {
+      "bsonType": "string",
+      "title": "订单状态",
+      "enum": ["pending", "won", "lost", "settled"],
+      "description": "待开奖->已中奖/未中奖->已结算",
+      "default": "pending"
+    },
+    "isParlay": {
+      "bsonType": "bool",
+      "title": "是否串关",
+      "default": false
+    },
+    "createTime": { "bsonType": "date", "title": "下单时间" },
+    "settleTime": { "bsonType": "date", "title": "结算时间" }
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "bsonType": "object",
+  "required": ["key", "value"],
+  "properties": {
+    "_id": { "bsonType": "string" },
+    "key": {
+      "bsonType": "string",
+      "title": "配置键",
+      "description": "如: minBet, maxBet"
+    },
+    "value": {
+      "bsonType": "string",
+      "title": "配置值"
+    },
+    "description": {
+      "bsonType": "string",
+      "title": "配置说明"
+    },
+    "updateTime": { "bsonType": "date" }
+  }
+}

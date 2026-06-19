@@ -1,0 +1,22 @@
+{
+  "bsonType": "object",
+  "required": ["name"],
+  "properties": {
+    "_id": { "bsonType": "string" },
+    "name": {
+      "bsonType": "string",
+      "title": "分类名称"
+    },
+    "parentId": {
+      "bsonType": "string",
+      "title": "父分类ID",
+      "description": "null表示大类，有值表示小类"
+    },
+    "sort": {
+      "bsonType": "int",
+      "title": "排序",
+      "default": 0
+    },
+    "createTime": { "bsonType": "date" }
+  }
+}

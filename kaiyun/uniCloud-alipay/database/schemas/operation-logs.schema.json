@@ -1,0 +1,45 @@
+{
+  "bsonType": "object",
+  "required": ["action", "detail"],
+  "properties": {
+    "_id": { "bsonType": "string" },
+    "adminId": {
+      "bsonType": "string",
+      "title": "操作管理员ID",
+      "foreignKey": "users._id"
+    },
+    "adminName": {
+      "bsonType": "string",
+      "title": "操作管理员用户名"
+    },
+    "action": {
+      "bsonType": "string",
+      "title": "操作类型",
+      "enum": ["set_win", "update_odds", "match_status", "create_user", "update_play", "copy_plays", "settle_match", "update_config"]
+    },
+    "targetType": {
+      "bsonType": "string",
+      "title": "目标类型",
+      "description": "matches / plays / orders / users"
+    },
+    "targetId": {
+      "bsonType": "string",
+      "title": "目标ID"
+    },
+    "detail": {
+      "bsonType": "string",
+      "title": "操作详情描述"
+    },
+    "beforeData": {
+      "bsonType": "object",
+      "title": "修改前数据",
+      "description": "记录变更前的数据快照"
+    },
+    "afterData": {
+      "bsonType": "object",
+      "title": "修改后数据",
+      "description": "记录变更后的数据"
+    },
+    "createTime": { "bsonType": "date", "title": "操作时间" }
+  }
+}

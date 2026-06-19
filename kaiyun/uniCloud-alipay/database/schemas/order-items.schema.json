@@ -1,0 +1,30 @@
+{
+  "bsonType": "object",
+  "required": ["orderId", "playId", "oddsSnapshot"],
+  "properties": {
+    "_id": { "bsonType": "string" },
+    "orderId": {
+      "bsonType": "string",
+      "title": "订单ID",
+      "foreignKey": "orders._id"
+    },
+    "playId": {
+      "bsonType": "string",
+      "title": "玩法ID",
+      "foreignKey": "plays._id"
+    },
+    "oddsSnapshot": {
+      "bsonType": "double",
+      "title": "下单时赔率快照",
+      "description": "锁定下单时的赔率，后续赔率修改不影响此订单"
+    },
+    "playName": {
+      "bsonType": "string",
+      "title": "玩法名称快照"
+    },
+    "categoryName": {
+      "bsonType": "string",
+      "title": "分类名称快照"
+    }
+  }
+}
