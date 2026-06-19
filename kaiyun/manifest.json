@@ -1,6 +1,6 @@
 {
     "name" : "kaiyun",
-    "appid" : "__UNI__4EB8E10",
+    "appid" : "__UNI__006BFB1",
     "description" : "",
     "versionName" : "1.0.0",
     "versionCode" : "100",
@@ -48,13 +48,12 @@
     },
     /* 快应用特有相关 */
     "quickapp" : {},
-    /* 小程序特有相关 */
-    /* H5 配置 - 移动端仅H5 */
+    /* 小程序特有相关 *//* H5 配置 - 移动端仅H5 */
     "h5" : {
         "title" : "世界杯彩票",
         "router" : {
             "mode" : "hash",
-            "base" : "/"
+            "base" : "./"
         },
         "optimization" : {
             "treeShaking" : {

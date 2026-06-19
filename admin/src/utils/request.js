@@ -1,11 +1,9 @@
 import axios from 'axios'
 
 // 开发环境通过 Vite proxy 代理到 uniCloud（解决 CORS）
-// 生产环境直接配置 uniCloud 域名
-const BASE_URL = import.meta.env.DEV
-  ? '/api'
-  : 'http://worldcup.fumaokitchen.com'
-// const BASE_URL = 'http://worldcup.fumaokitchen.com'
+// 生产环境用 uniCloud 默认 HTTPS 域名（避免 mixed content）
+const PROD_BASE = 'https://env-00jy6fzs9qxf.dev-hz.cloudbasefunction.cn'
+const BASE_URL = import.meta.env.DEV ? '/api' : PROD_BASE
 
 const http = axios.create({
   baseURL: BASE_URL,
