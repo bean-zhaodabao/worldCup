@@ -8,8 +8,13 @@
         </view>
         <view class="order-body">
           <text class="match-name">{{ order.matchName }}</text>
+          <text class="match-teams" v-if="order.teamA || order.teamB">{{ order.teamA }} VS {{ order.teamB }}</text>
           <view class="play-items">
-            <text v-for="item in order.items" :key="item._id">{{ item.playName }} @{{ item.oddsSnapshot }}</text>
+            <view v-for="item in order.items" :key="item._id" class="play-line">
+              <text>{{ item.playName }}</text>
+              <text class="play-odds">@{{ item.oddsSnapshot }}</text>
+              <text class="play-cat" v-if="item.categoryName">{{ item.categoryName }}</text>
+            </view>
           </view>
         </view>
         <view class="order-foot">
@@ -70,7 +75,12 @@ onShow(() => { loadOrders() })
   }
   .order-body {
     margin-bottom: 16rpx; .match-name { font-weight: bold; font-size: 30rpx; }
-    .play-items { margin-top: 8rpx; text { display: block; font-size: 26rpx; color: #666; } }
+    .match-teams { display: block; font-size: 26rpx; color: #1a237e; margin-top: 6rpx; font-weight: 500; }
+    .play-items { margin-top: 8rpx;
+      .play-line { display: flex; align-items: center; flex-wrap: wrap; gap: 8rpx; padding: 4rpx 0; }
+      .play-odds { font-size: 26rpx; color: #d32f2f; font-weight: bold; }
+      .play-cat { font-size: 22rpx; color: #999; background: #f5f5f5; padding: 2rpx 10rpx; border-radius: 8rpx; }
+    }
   }
   .order-foot { display: flex; justify-content: space-between; font-size: 28rpx; color: #333; }
 }

@@ -19,7 +19,7 @@
           </view>
         </view>
         <view class="match-time">
-          <text>开赛时间: {{ match.startTime }}</text>
+          <text>开赛时间: {{ formatTime(match.startTime) }}</text>
         </view>
       </view>
 
@@ -38,6 +38,16 @@ const matchList = ref([])
 const loading = ref(false)
 
 const statusMap = { upcoming: '未开始', live: '进行中', finished: '已结束', settled: '已结算' }
+
+const formatTime = (t) => {
+  if (!t) return ''
+  const d = new Date(t)
+  return d.getFullYear() + '-' +
+    String(d.getMonth() + 1).padStart(2, '0') + '-' +
+    String(d.getDate()).padStart(2, '0') + ' ' +
+    String(d.getHours()).padStart(2, '0') + ':' +
+    String(d.getMinutes()).padStart(2, '0')
+}
 
 const goDetail = (match) => {
   uni.navigateTo({ url: '/pages/match/detail?id=' + match._id })

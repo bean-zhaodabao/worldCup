@@ -4,7 +4,7 @@
       <text class="section-title">订单信息</text>
       <view class="info-row"><text>单号</text><text>{{ order.orderNo }}</text></view>
       <view class="info-row"><text>状态</text><text>{{ statusMap[order.status] }}</text></view>
-      <view class="info-row"><text>下单时间</text><text>{{ order.createTime }}</text></view>
+      <view class="info-row"><text>下单时间</text><text>{{ formatTime(order.createTime) }}</text></view>
     </view>
     <view class="section">
       <text class="section-title">赛事信息</text>

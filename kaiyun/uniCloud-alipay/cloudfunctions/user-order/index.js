@@ -36,10 +36,25 @@ exports.main = async (event, context) => {
       const list = await Promise.all((res.data || []).map(async order => {
         const items = await db.collection('order-items').where({ orderId: order._id }).get()
         const match = await db.collection('matches').doc(order.matchId).get()
+        const matchData = (match.data && match.data[0]) || {}
+        // 补充分类名称
+        const itemsWithCategory = await Promise.all((items.data || []).map(async item => {
+          if (!item.categoryName && item.playId) {
+            const play = await db.collection('plays').doc(item.playId).get()
+            const playData = (play.data && play.data[0]) || {}
+            if (playData.categoryId) {
+              const cat = await db.collection('play-categories').doc(playData.categoryId).get()
+              item.categoryName = (cat.data && cat.data[0] && cat.data[0].name) || ''
+            }
+          }
+          return item
+        }))
         return {
           ...order,
-          matchName: (match.data && match.data[0] && match.data[0].name) || '',
-          items: items.data || []
+          matchName: matchData.name || '',
+          teamA: matchData.teamA || '',
+          teamB: matchData.teamB || '',
+          items: itemsWithCategory
         }
       }))
 
