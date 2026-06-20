@@ -4,12 +4,12 @@
     <view class="match-info">
       <view class="teams">
         <view class="team">
-          <image :src="match.teamAFlag || '/static/logo.png'" mode="aspectFit" class="flag" />
+          <image :src="match.teamAFlag || '/static/football.png'" mode="aspectFit" class="flag" />
           <text>{{ match.teamA }}</text>
         </view>
         <text class="vs">VS</text>
         <view class="team">
-          <image :src="match.teamBFlag || '/static/logo.png'" mode="aspectFit" class="flag" />
+          <image :src="match.teamBFlag || '/static/football.png'" mode="aspectFit" class="flag" />
           <text>{{ match.teamB }}</text>
         </view>
       </view>
