@@ -13,7 +13,7 @@
     <el-row :gutter="16" style="margin-bottom:16px">
       <el-col :span="8"><el-card shadow="hover"><div class="stat-mini">该用户当天下单总额：<b>¥ {{ stats.dailyTotal }}</b></div></el-card></el-col>
       <el-col :span="8"><el-card shadow="hover"><div class="stat-mini">该用户中奖总额：<b>¥ {{ stats.winTotal }}</b></div></el-card></el-col>
-      <el-col :span="8"><el-card shadow="hover"><div class="stat-mini">查询结果数：<b>{{ stats.orderCount }}</b></div></el-card></el-col>
+      <el-col :span="8"><el-card shadow="hover"><div class="stat-mini">订单数：<b>{{ stats.orderCount }}</b></div></el-card></el-col>
     </el-row>
 
     <el-card>
@@ -46,7 +46,7 @@ const stats=reactive({dailyTotal:'0.00',winTotal:'0.00',orderCount:0})
 const matchOpts=ref([])
 
 const loadList=async()=>{loading.value=true;try{const res=await getOrderList({...qf,page:page.value,pageSize:ps.value});list.value=res.data.list||[];total.value=res.data.total||0;refreshStats()}catch(e){console.error(e)}loading.value=false}
-const refreshStats=async()=>{try{const res=await getOrderStats({matchId:qf.matchId,userId:qf.username});Object.assign(stats,{dailyTotal:res.data.dailyTotal.toFixed(2),winTotal:res.data.userMatchWinTotal.toFixed(2),orderCount:res.data.orderCount})}catch(e){}}
+const refreshStats=async()=>{try{const res=await getOrderStats({matchId:qf.matchId,username:qf.username});Object.assign(stats,{dailyTotal:(res.data.dailyUserTotal||0).toFixed(2),winTotal:(res.data.userMatchWinTotal||0).toFixed(2),orderCount:res.data.orderCount})}catch(e){}}
 onMounted(async()=>{const m=await getMatchList({pageSize:500});matchOpts.value=m.data.list||[];loadList()})
 const fmt=(t)=>t?new Date(t).toLocaleString('zh-CN'):''
 </script>
