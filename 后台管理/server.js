@@ -19,7 +19,7 @@ const { exec } = require('child_process');
 const url = require('url');
 
 // ==================== 配置 ====================
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3002;
 const DIST_DIR = path.join(__dirname);
 const PROXY_TARGET = 'http://worldcup.fumaokitchen.com';
 
