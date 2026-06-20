@@ -1,10 +1,5 @@
 <template>
   <view class="match-list">
-    <!-- 顶部导航 -->
-    <view class="top-bar">
-      <text class="title">世界杯赛事</text>
-    </view>
-
     <!-- 赛事列表 -->
     <view class="list">
       <view class="match-card" v-for="match in matchList" :key="match._id" @click="goDetail(match)">
@@ -74,12 +69,6 @@ onShow(() => { loadMatches() })
 .match-list {
   min-height: 100vh;
   background: #f0f2f5;
-
-  .top-bar {
-    background: linear-gradient(135deg, #1a237e, #0d47a1);
-    padding: 30rpx 30rpx;
-    .title { color: #fff; font-size: 36rpx; font-weight: bold; }
-  }
 
   .list { padding: 20rpx; }
 

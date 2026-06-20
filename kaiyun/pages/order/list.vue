@@ -1,7 +1,5 @@
 <template>
   <view class="order-list">
-    <view class="top-bar"><text class="title">我的订单</text></view>
-
     <view class="list">
       <view class="order-card" v-for="order in orders" :key="order._id" @click="goDetail(order)">
         <view class="order-head">
@@ -59,10 +57,6 @@ onShow(() => { loadOrders() })
 
 <style lang="scss" scoped>
 .order-list { min-height: 100vh; background: #f0f2f5; }
-.top-bar {
-  background: linear-gradient(135deg, #1a237e, #0d47a1);
-  padding: 30rpx; .title { color: #fff; font-size: 36rpx; font-weight: bold; }
-}
 .order-card {
   background: #fff; margin: 20rpx; border-radius: 16rpx; padding: 30rpx;
   .order-head {

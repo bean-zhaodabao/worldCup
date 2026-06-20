@@ -37,6 +37,32 @@
 			}
 		}
 	],
+	"tabBar": {
+		"color": "#999999",
+		"selectedColor": "#1a237e",
+		"backgroundColor": "#ffffff",
+		"borderStyle": "black",
+		"list": [
+			{
+				"pagePath": "pages/index/index",
+				"text": "赛事",
+				"iconPath": "static/tab-home.svg",
+				"selectedIconPath": "static/tab-home-active.svg"
+			},
+			{
+				"pagePath": "pages/order/list",
+				"text": "订单",
+				"iconPath": "static/tab-order.svg",
+				"selectedIconPath": "static/tab-order-active.svg"
+			},
+			{
+				"pagePath": "pages/mine/mine",
+				"text": "我的",
+				"iconPath": "static/tab-mine.svg",
+				"selectedIconPath": "static/tab-mine-active.svg"
+			}
+		]
+	},
 	"globalStyle": {
 		"navigationBarTextStyle": "white",
 		"navigationBarTitleText": "世界杯彩票",

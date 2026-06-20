@@ -27,7 +27,7 @@ try {
   username.value = info.username || '用户'
 } catch (e) { username.value = '用户' }
 
-const goOrders = () => { uni.navigateTo({ url: '/pages/order/list' }) }
+const goOrders = () => { uni.switchTab({ url: '/pages/order/list' }) }
 
 const handleLogout = () => {
   uni.removeStorageSync('token')
