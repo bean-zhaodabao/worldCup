@@ -21,6 +21,9 @@
           <text>下注: ¥{{ order.betAmount }}</text>
           <text v-if="order.status === 'won'">中奖: ¥{{ order.winAmount }}</text>
         </view>
+        <view class="order-time">
+          <text>{{ formatTime(order.createTime) }}</text>
+        </view>
       </view>
 
       <view class="empty" v-if="orders.length === 0">
@@ -37,6 +40,12 @@ import { onShow } from '@dcloudio/uni-app'
 const orders = ref([])
 const loading = ref(false)
 const statusMap = { pending: '待开奖', won: '已中奖', lost: '未中奖', settled: '已结算' }
+
+const formatTime = (t) => {
+  if (!t) return ''
+  const d = new Date(t)
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0') + ' ' + String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0')
+}
 
 const goDetail = (order) => {
   uni.navigateTo({ url: '/pages/order/detail?id=' + order._id })
@@ -83,6 +92,7 @@ onShow(() => { loadOrders() })
     }
   }
   .order-foot { display: flex; justify-content: space-between; font-size: 28rpx; color: #333; }
+  .order-time { margin-top: 10rpx; font-size: 22rpx; color: #bbb; }
 }
 .empty { text-align: center; padding: 200rpx 0; color: #999; }
 </style>
