@@ -49,6 +49,9 @@
     <view class="section">
       <view class="info-row"><text>下注金额</text><text class="amount">¥ {{ order.betAmount }}</text></view>
       <view class="info-row"><text>总赔率</text><text>{{ order.totalOdds }}</text></view>
+      <view class="info-row">
+        <text>可赢额</text><text class="amount winnable">¥ {{ (order.betAmount * order.totalOdds - order.betAmount).toFixed(2) }}</text>
+      </view>
       <view class="info-row" v-if="order.status === 'won' || order.status === 'settled'">
         <text>中奖金额</text><text class="amount win">¥ {{ order.winAmount }}</text>
       </view>
@@ -94,6 +97,7 @@ onLoad(async (options) => {
   .play-match-tag { font-size: 22rpx; color: #1a237e; background: #e8eaf6; padding: 2rpx 12rpx; border-radius: 8rpx; margin-top: 4rpx; display: inline-block; width: fit-content; }
   .play-odds { color: #d32f2f; font-weight: bold; }
   .amount { font-weight: bold; color: #333; }
+  .winnable { color: #ef6c00; font-size: 32rpx; }
   .win { color: #d32f2f; font-size: 32rpx; }
   .parlay-text { color: #1a237e; font-weight: bold; }
   .single-text { color: #666; }

@@ -36,6 +36,7 @@
         </view>
         <view class="order-foot">
           <text>下注: ¥{{ order.betAmount }}</text>
+          <text class="winnable">可赢: ¥{{ (order.betAmount * order.totalOdds - order.betAmount).toFixed(2) }}</text>
           <text v-if="order.status === 'won' || order.status === 'settled'">中奖: ¥{{ order.winAmount }}</text>
         </view>
         <view class="order-time">
@@ -123,7 +124,9 @@ onShow(() => { loadOrders() })
       .play-match { font-size: 22rpx; color: #666; background: #e8eaf6; padding: 2rpx 10rpx; border-radius: 8rpx; }
     }
   }
-  .order-foot { display: flex; justify-content: space-between; font-size: 28rpx; color: #333; }
+  .order-foot { display: flex; justify-content: space-between; font-size: 28rpx; color: #333;
+    .winnable { color: #ef6c00; font-weight: bold; }
+  }
   .order-time { margin-top: 10rpx; font-size: 22rpx; color: #bbb; }
 }
 .empty { text-align: center; padding: 200rpx 0; color: #999; }
