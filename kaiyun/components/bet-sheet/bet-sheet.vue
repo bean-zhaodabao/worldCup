@@ -6,28 +6,39 @@
 
       <!-- 头部信息 -->
       <view class="sheet-header">
-        <view class="header-row">
-          <text class="play-name">{{ firstPlayName }}</text>
-          <text class="odds-tag">赔率 {{ totalOdds }}</text>
-        </view>
-        <view class="header-row sub">
-          <text class="category-text">{{ categoryText }}</text>
-        </view>
-        <view class="header-row teams">
-          <text>{{ matchInfo.teamA }} VS {{ matchInfo.teamB }}</text>
-        </view>
+        <!-- 单关模式：显示一场比赛 info -->
+        <template v-if="!isParlay && playList.length === 1">
+          <view class="header-row">
+            <text class="play-name">{{ firstPlayName }}</text>
+            <text class="odds-tag">赔率 {{ totalOdds }}</text>
+          </view>
+          <view class="header-row sub">
+            <text class="category-text">{{ categoryText }}</text>
+          </view>
+          <view class="header-row teams">
+            <text>{{ matchInfo.teamA }} VS {{ matchInfo.teamB }}</text>
+          </view>
+        </template>
 
-        <!-- 已选玩法列表（串关时显示） -->
-        <view class="selected-plays" v-if="playList.length > 0">
-          <view class="play-tag" v-for="(p, i) in playList" :key="p._id">
-            <text>{{ p.name }}</text>
-            <text class="play-tag-odds">@{{ p.odds }}</text>
-            <text class="play-tag-remove" @click="removePlay(i)">×</text>
+        <!-- 串关模式：显示多个场次 -->
+        <template v-else-if="isParlay">
+          <view class="header-row">
+            <text class="play-name">{{ playList.length }}场串关</text>
+            <text class="odds-tag">赔率 {{ totalOdds }}</text>
           </view>
-          <view class="play-tag add-tag" @click="$emit('addPlay')">
-            <text>+ 串</text>
+          <view class="parlay-matches">
+            <view class="parlay-match-item" v-for="(p, i) in playList" :key="p.playId || i">
+              <view class="parlay-match-header">
+                <text class="parlay-match-name">{{ p.teamA }} VS {{ p.teamB }}</text>
+                <text class="play-tag-remove" @click="removePlay(i)">×</text>
+              </view>
+              <view class="parlay-play-row">
+                <text class="parlay-play-name">{{ p.playName }}</text>
+                <text class="parlay-play-odds">@{{ p.odds }}</text>
+              </view>
+            </view>
           </view>
-        </view>
+        </template>
       </view>
 
       <!-- 金额输入区 -->
@@ -53,9 +64,9 @@
           </view>
         </view>
 
-        <!-- 串（倍投）选择 -->
-        <view class="multiplier-row" v-if="playList.length >= 1">
-          <text class="multiplier-label">串 (倍投)</text>
+        <!-- 倍数选择 -->
+        <view class="multiplier-row">
+          <text class="multiplier-label">倍数</text>
           <view class="multiplier-control">
             <view class="mult-btn" @click="changeMultiplier(-1)">-</view>
             <text class="mult-value">{{ multiplier }}</text>
@@ -77,7 +88,7 @@
               'key-confirm': key.type === 'confirm',
               'key-disabled': key.type === 'confirm' && !canSubmit
             }"
-            @touchstart.prevent="onKeyPress(key)"
+            @click="onKeyPress(key)"
           >
             <text v-if="key.type === 'delete'">⌫</text>
             <text v-else-if="key.type === 'confirm'">确定</text>
@@ -112,16 +123,18 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick } from 'vue'
+import { ref, computed, watch } from 'vue'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
   matchInfo: { type: Object, default: () => ({ teamA: '', teamB: '' }) },
-  // selectedPlays: [{ _id, name, odds, categoryName, bigCategoryName }]
+  // selectedPlays: [{ _id (or playId), name (or playName), odds, categoryName, bigCategoryName, teamA, teamB, matchName }]
   selectedPlays: { type: Array, default: () => [] },
+  // 串关模式标记
+  isParlay: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['confirm', 'cancel', 'addPlay'])
+const emit = defineEmits(['confirm', 'cancel', 'removePlay'])
 
 // ============ 金额输入 ============
 const inputAmount = ref('')
@@ -139,23 +152,24 @@ const playList = computed(() => props.selectedPlays || [])
 
 const firstPlayName = computed(() => {
   if (playList.value.length === 0) return ''
-  if (playList.value.length === 1) {
-    const p = playList.value[0]
-    return p.label ? (p.name + ' (' + p.label + ')') : p.name
-	// return p.label ? p.label : ''
-  }
-  return playList.value.map(p => p.label ? (p.name + ' (' + p.label + ')') : p.name).join(' + ')
+  const p = playList.value[0]
+  const name = p.playName || p.name || ''
+  const label = p.playLabel || p.label || ''
+  return label ? (name + ' (' + label + ')') : name
 })
 
 const categoryText = computed(() => {
   if (playList.value.length === 0) return ''
   const p = playList.value[0]
-  return p.bigCategoryName ? (p.bigCategoryName + ' / ' + p.categoryName) : (p.categoryName || '')
+  const bigCat = p.bigCategoryName || ''
+  const cat = p.categoryName || ''
+  if (bigCat && cat) return bigCat + ' / ' + cat
+  return bigCat || cat
 })
 
 const totalOdds = computed(() => {
   if (playList.value.length === 0) return '0.00'
-  const product = playList.value.reduce((acc, p) => acc * p.odds, 1)
+  const product = playList.value.reduce((acc, p) => acc * (p.odds || 0), 1)
   return product.toFixed(2)
 })
 
@@ -164,7 +178,6 @@ const winAmount = computed(() => {
   const amt = parseFloat(inputAmount.value) || 0
   const odds = parseFloat(totalOdds.value) || 0
   const mult = multiplier.value
-  // 可赢额度 = (下注额 × 赔率 - 下注额) × 倍数
   return ((amt * odds - amt) * mult).toFixed(2)
 })
 
@@ -173,7 +186,12 @@ const slideText = computed(() => {
   return parseFloat(w) > 0 ? ('可赢 ¥' + w + '  ››› 滑动确认') : '请输入金额后滑动确认'
 })
 
-const canSubmit = computed(() => parseFloat(inputAmount.value) > 0)
+const canSubmit = computed(() => {
+  const amt = parseFloat(inputAmount.value)
+  if (isNaN(amt) || amt <= 0) return false
+  if (props.isParlay && playList.value.length < 2) return false
+  return true
+})
 
 // ============ 键盘 ============
 const keypadKeys = [
@@ -205,10 +223,8 @@ const onKeyPress = (key) => {
     return
   }
   if (key.type === 'number') {
-    // 限制整数部分最多6位
     const parts = inputAmount.value.split('.')
     if (parts[0] && parts[0].length >= 6 && !inputAmount.value.includes('.')) return
-    // 限制小数最多2位
     if (inputAmount.value.includes('.') && parts[1] && parts[1].length >= 2) return
     inputAmount.value += key.value
     return
@@ -236,17 +252,20 @@ const changeMultiplier = (delta) => {
 }
 
 const removePlay = (index) => {
-  if (playList.value.length <= 1) return // 至少保留1个
-  const newList = [...playList.value]
-  newList.splice(index, 1)
-  // 需要通知父组件更新
-  emit('update:selectedPlays', newList)
+  if (props.isParlay && playList.value.length <= 2) {
+    uni.showToast({ title: '串关至少需要2个场次', icon: 'none' })
+    return
+  }
+  const item = playList.value[index]
+  if (item) {
+    emit('removePlay', { playId: item.playId || item._id, matchId: item.matchId })
+  }
 }
 
 // ============ 滑动提交 ============
 const slideLeft = ref(0)
 const slideProgress = ref(0)
-const slideMaxWidth = ref(300) // 轨道宽度（动态获取）
+const slideMaxWidth = ref(300)
 let startX = 0
 let currentLeft = 0
 let trackWidth = 0
@@ -256,11 +275,10 @@ const onSlideStart = (e) => {
   startX = e.touches[0].clientX
   currentLeft = slideLeft.value
 
-  // 动态获取轨道宽度
   const query = uni.createSelectorQuery().in(instance)
   query.select('.slide-track').boundingClientRect(rect => {
     if (rect) {
-      trackWidth = rect.width - 44 // 减去滑块宽度
+      trackWidth = rect.width - 44
       slideMaxWidth.value = trackWidth
     }
   }).exec()
@@ -277,15 +295,12 @@ const onSlideMove = (e) => {
 const onSlideEnd = (e) => {
   if (!canSubmit.value) return
   if (slideProgress.value >= 85) {
-    // 滑动到位，触发提交
     handleSubmit()
   }
-  // 弹回
   slideLeft.value = 0
   slideProgress.value = 0
 }
 
-// uni-app 组件实例引用
 import { getCurrentInstance } from 'vue'
 const instance = getCurrentInstance()
 
@@ -293,13 +308,12 @@ const instance = getCurrentInstance()
 const handleSubmit = () => {
   if (!canSubmit.value) return
   emit('confirm', {
-    playIds: playList.value.map(p => p._id),
+    playIds: playList.value.map(p => p.playId || p._id),
     betAmount: parseFloat(parseFloat(inputAmount.value).toFixed(2)),
     multiplier: multiplier.value,
     totalOdds: parseFloat(totalOdds.value),
     isParlay: playList.value.length > 1
   })
-  // 重置
   inputAmount.value = ''
   multiplier.value = 1
 }
@@ -308,7 +322,6 @@ const handleMaskClose = () => {
   emit('cancel')
 }
 
-// visible 变化时重置
 watch(() => props.visible, (val) => {
   if (val) {
     inputAmount.value = ''
@@ -361,16 +374,23 @@ watch(() => props.visible, (val) => {
   .teams { font-size: 26rpx; color: #666; margin-top: 8rpx; }
 }
 
-// 已选玩法标签
-.selected-plays {
-  display: flex; flex-wrap: wrap; gap: 12rpx; margin-top: 16rpx;
-  .play-tag {
-    display: flex; align-items: center; gap: 6rpx;
-    background: #e8eaf6; padding: 6rpx 16rpx; border-radius: 20rpx; font-size: 24rpx;
-    .play-tag-odds { color: #d32f2f; font-weight: bold; }
-    .play-tag-remove { color: #999; font-size: 28rpx; margin-left: 4rpx; }
-    &.add-tag {
-      background: #fff; border: 1rpx dashed #1a237e; color: #1a237e;
+// 串关场次列表
+.parlay-matches {
+  margin-top: 12rpx;
+  .parlay-match-item {
+    background: #f8f9fa; border-radius: 12rpx; padding: 14rpx 16rpx; margin-bottom: 10rpx;
+    .parlay-match-header {
+      display: flex; justify-content: space-between; align-items: center;
+      .parlay-match-name { font-size: 26rpx; font-weight: bold; color: #1a237e; }
+      .play-tag-remove {
+        color: #999; font-size: 32rpx; padding: 4rpx 12rpx;
+        &:active { color: #d32f2f; }
+      }
+    }
+    .parlay-play-row {
+      display: flex; justify-content: space-between; align-items: center; margin-top: 8rpx;
+      .parlay-play-name { font-size: 24rpx; color: #666; }
+      .parlay-play-odds { font-size: 26rpx; color: #d32f2f; font-weight: bold; }
     }
   }
 }

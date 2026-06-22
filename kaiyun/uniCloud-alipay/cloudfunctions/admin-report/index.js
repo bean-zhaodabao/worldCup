@@ -73,10 +73,14 @@ exports.main = async (event, context) => {
     // ============ 按赛事统计 ============
     if (path.includes('/match')) {
       const matches = await db.collection('matches').get()
+      const allOrders = await db.collection('orders').get()
       const stats = await Promise.all((matches.data || []).map(async match => {
-        const orders = await db.collection('orders').where({ matchId: match._id }).get()
-        const totalBet = (orders.data || []).reduce((s, o) => s + o.betAmount, 0)
-        const totalWin = (orders.data || []).filter(o => o.status === 'won' || o.status === 'settled').reduce((s, o) => s + (o.winAmount || 0), 0)
+        // 兼容 matchId 和 matchIds
+        const orders = (allOrders.data || []).filter(o =>
+          o.matchId === match._id || (o.matchIds && o.matchIds.includes(match._id))
+        )
+        const totalBet = orders.reduce((s, o) => s + o.betAmount, 0)
+        const totalWin = orders.filter(o => o.status === 'won' || o.status === 'settled').reduce((s, o) => s + (o.winAmount || 0), 0)
         return {
           matchId: match._id,
           matchName: match.name,
@@ -86,7 +90,7 @@ exports.main = async (event, context) => {
           totalBet,
           totalWin,
           profit: totalBet - totalWin,
-          orderCount: (orders.data || []).length
+          orderCount: orders.length
         }
       }))
       return ok({ matchStats: stats })

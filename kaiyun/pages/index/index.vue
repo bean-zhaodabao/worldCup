@@ -21,6 +21,10 @@
         <view class="match-time">
           <text>开赛时间: {{ formatTime(match.startTime) }}</text>
         </view>
+        <!-- 串关标记 -->
+        <view class="cart-badge" v-if="betCart.hasMatch(match._id)">
+          <text>已在串关列表中</text>
+        </view>
       </view>
 
       <!-- 空状态 -->
@@ -28,14 +32,39 @@
         <text>暂无赛事</text>
       </view>
     </view>
+
+    <!-- 串关购物车浮动按钮 -->
+    <view class="floating-cart" v-if="cartCount > 0" @click="showCartSheet = true">
+      <text class="cart-badge-count">{{ cartCount }}</text>
+      <text class="cart-label">串关单</text>
+      <text class="cart-odds">赔率 {{ cartTotalOdds.toFixed(2) }}</text>
+    </view>
+
+    <!-- 串关下注弹窗 -->
+    <bet-sheet
+      :visible="showCartSheet"
+      :matchInfo="{}"
+      :selectedPlays="cartItems"
+      :isParlay="true"
+      @confirm="handleCartConfirm"
+      @cancel="showCartSheet = false"
+      @removePlay="onCartRemovePlay"
+    />
   </view>
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
+import BetSheet from '@/components/bet-sheet/bet-sheet.vue'
+import { betCart } from '@/stores/betCart.js'
 
 const matchList = ref([])
 const loading = ref(false)
+const showCartSheet = ref(false)
+
+const cartCount = computed(() => betCart.count)
+const cartTotalOdds = computed(() => betCart.totalOdds)
+const cartItems = computed(() => betCart.items)
 
 const statusMap = { upcoming: '未开始', live: '进行中', finished: '已结束', settled: '已结算' }
 
@@ -51,6 +80,39 @@ const formatTime = (t) => {
 
 const goDetail = (match) => {
   uni.navigateTo({ url: '/pages/match/detail?id=' + match._id })
+}
+
+const onCartRemovePlay = ({ playId }) => {
+  betCart.remove(playId)
+}
+
+const handleCartConfirm = async (betData) => {
+  showCartSheet.value = false
+  try {
+    const res = await uniCloud.callFunction({
+      name: 'user-order',
+      data: {
+        token: uni.getStorageSync('token'),
+        matchIds: betCart.getMatchIds(),
+        playIds: betData.playIds,
+        betAmount: betData.betAmount,
+        isParlay: true
+      }
+    })
+    const result = res.result
+    if (result && result.code === 0) {
+      uni.showToast({
+        title: '串关下单成功！可赢 ¥' + (betData.totalOdds * betData.betAmount).toFixed(2),
+        icon: 'success', duration: 2000
+      })
+      betCart.clear()
+    } else {
+      uni.showToast({ title: (result && result.message) || '下单失败', icon: 'error' })
+    }
+  } catch (e) {
+    console.error('串关下单失败:', e)
+    uni.showToast({ title: '网络错误，请重试', icon: 'error' })
+  }
 }
 
 const loadMatches = async () => {
@@ -79,6 +141,7 @@ onShow(() => { loadMatches() })
 .match-list {
   min-height: 100vh;
   background: #f0f2f5;
+  padding-bottom: 120rpx;
 
   .list { padding: 20rpx; }
 
@@ -88,6 +151,7 @@ onShow(() => { loadMatches() })
     padding: 30rpx;
     margin-bottom: 20rpx;
     box-shadow: 0 2rpx 12rpx rgba(0,0,0,0.06);
+    position: relative;
 
     .match-header {
       display: flex; justify-content: space-between; align-items: center;
@@ -110,8 +174,31 @@ onShow(() => { loadMatches() })
     }
 
     .match-time { font-size: 24rpx; color: #999; text-align: center; }
+
+    .cart-badge {
+      position: absolute; top: 12rpx; right: 12rpx;
+      background: #1a237e; color: #fff; font-size: 20rpx;
+      padding: 4rpx 14rpx; border-radius: 16rpx;
+    }
   }
 
   .empty { text-align: center; padding: 200rpx 0; color: #999; font-size: 28rpx; }
+}
+
+// ============ 浮动购物车按钮 ============
+.floating-cart {
+  position: fixed; bottom: 120rpx; left: 50%; transform: translateX(-50%);
+  background: linear-gradient(135deg, #1a237e, #283593);
+  color: #fff; padding: 20rpx 40rpx; border-radius: 48rpx;
+  display: flex; align-items: center; gap: 16rpx;
+  box-shadow: 0 8rpx 24rpx rgba(26, 35, 126, 0.4);
+  z-index: 100;
+  .cart-badge-count {
+    width: 40rpx; height: 40rpx; background: #ff5722; color: #fff;
+    border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 24rpx; font-weight: bold; flex-shrink: 0;
+  }
+  .cart-label { font-size: 28rpx; font-weight: bold; }
+  .cart-odds { font-size: 24rpx; opacity: 0.85; }
 }
 </style>

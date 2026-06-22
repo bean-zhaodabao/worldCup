@@ -25,18 +25,47 @@ exports.main = async (event, context) => {
     // 更新赛事状态
     await db.collection('matches').doc(matchId).update({ status: 'settled', updateTime: new Date() })
 
-    // 将该赛事所有订单标记为已结算
-    const updateRes = await db.collection('orders')
-      .where({ matchId, status: db.command.in(['won', 'lost']) })
+    // 结算该赛事相关的订单：
+    // 1. 单关订单（matchId === matchId）
+    // 2. 串关订单中仅包含此场次的（matchIds 只有这一个 matchId 的）
+    //    对于包含多场次的串关，不在此处结算（需等所有场次都结算后再处理）
+    const singleOrders = await db.collection('orders')
+      .where({ matchId, status: db.command.in(['won', 'lost']), isParlay: db.command.neq(true) })
       .update({ status: 'settled', settleTime: new Date() })
+
+    // 同时检查串关订单：如果 matchIds 只包含这一个 matchId，也结算
+    const allParlayOrders = await db.collection('orders')
+      .where({ status: db.command.in(['won', 'lost']), isParlay: true })
+      .get()
+
+    let parlaySettledCount = 0
+    for (const order of (allParlayOrders.data || [])) {
+      const orderMatchIds = order.matchIds || []
+      // 如果串关中包含此场次，且所有场次都已结算
+      if (orderMatchIds.includes(matchId)) {
+        const allMatches = await db.collection('matches')
+          .where({ _id: db.command.in(orderMatchIds) })
+          .get()
+        const allSettled = (allMatches.data || []).every(m => m.status === 'settled')
+        if (allSettled) {
+          await db.collection('orders').doc(order._id).update({
+            status: 'settled',
+            settleTime: new Date()
+          })
+          parlaySettledCount++
+        }
+      }
+    }
+
+    const totalSettled = (singleOrders.updated || 0) + parlaySettledCount
 
     await writeLog(db, {
       adminId: admin._id, adminName: admin.username,
       action: 'settle_match', targetType: 'matches', targetId: matchId,
-      detail: '结算赛事: ' + match.data[0].name + ', 处理订单数: ' + (updateRes.updated || 0)
+      detail: '结算赛事: ' + match.data[0].name + ', 处理订单数: ' + totalSettled
     })
 
-    return ok({ settledOrders: updateRes.updated || 0 }, '赛事已结算')
+    return ok({ settledOrders: totalSettled }, '赛事已结算')
   } catch (e) {
     console.error('admin-settle error:', e)
     return err(e.message || '服务器错误')

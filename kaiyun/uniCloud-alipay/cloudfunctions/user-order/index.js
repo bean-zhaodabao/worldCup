@@ -5,8 +5,6 @@ const { success, fail, verifyToken, generateOrderNo, writeLog } = require('./uti
 
 exports.main = async (event, context) => {
   // ============ 兼容两种调用方式 ============
-  // 1. uniCloud.callFunction (移动端): 数据直接在 event 顶层
-  // 2. HTTP URL 调用 (管理端): event.httpMethod / event.body / event.queryStringParameters
   const isHttp = !!event.httpMethod
   const token = event.token || (isHttp && event.headers && (event.headers.authorization || event.headers.Authorization || '')).replace('Bearer ', '')
   const user = await verifyToken(db, token)
@@ -14,11 +12,9 @@ exports.main = async (event, context) => {
 
   try {
     // ============ 判断操作类型 ============
-    // 直接调用：有 matchId + playIds → 下单；否则 → 查订单
-    // HTTP 调用：method === 'POST' → 下单；method === 'GET' → 查订单
     const isCreate = isHttp
       ? (event.httpMethod === 'POST')
-      : !!(event.matchId && event.playIds && event.playIds.length)
+      : !!(event.matchId || (event.matchIds && event.matchIds.length)) && !!(event.playIds && event.playIds.length)
 
     // ============ 查询我的订单 ============
     if (!isCreate) {
@@ -35,8 +31,23 @@ exports.main = async (event, context) => {
 
       const list = await Promise.all((res.data || []).map(async order => {
         const items = await db.collection('order-items').where({ orderId: order._id }).get()
-        const match = await db.collection('matches').doc(order.matchId).get()
-        const matchData = (match.data && match.data[0]) || {}
+
+        // 获取关联的赛事信息（支持串关多场次）
+        const matchIds = order.matchIds || (order.matchId ? [order.matchId] : [])
+        const matchesData = []
+        for (const mId of matchIds) {
+          const match = await db.collection('matches').doc(mId).get()
+          const mData = (match.data && match.data[0]) || {}
+          if (mData._id) {
+            matchesData.push({
+              _id: mData._id,
+              name: mData.name || '',
+              teamA: mData.teamA || '',
+              teamB: mData.teamB || ''
+            })
+          }
+        }
+
         // 补充分类名称
         const itemsWithCategory = await Promise.all((items.data || []).map(async item => {
           if (!item.categoryName && item.playId) {
@@ -47,13 +58,24 @@ exports.main = async (event, context) => {
               item.categoryName = (cat.data && cat.data[0] && cat.data[0].name) || ''
             }
           }
+          // 获取该 order-item 对应 match 的 vs 信息
+          if (item.matchId && !item.teamA) {
+            const relatedMatch = matchesData.find(m => m._id === item.matchId)
+            if (relatedMatch) {
+              item.teamA = relatedMatch.teamA
+              item.teamB = relatedMatch.teamB
+              item.matchName = relatedMatch.name
+            }
+          }
           return item
         }))
+
         return {
           ...order,
-          matchName: matchData.name || '',
-          teamA: matchData.teamA || '',
-          teamB: matchData.teamB || '',
+          matchName: matchesData.length === 1 ? matchesData[0].name : (matchesData.map(m => m.name).join(' / ')),
+          teamA: matchesData.length === 1 ? matchesData[0].teamA : '',
+          teamB: matchesData.length === 1 ? matchesData[0].teamB : '',
+          matches: matchesData,
           items: itemsWithCategory
         }
       }))
@@ -62,13 +84,24 @@ exports.main = async (event, context) => {
     }
 
     // ============ 下单 ============
-    // 统一从正确的位置取参数
     const body = isHttp ? (event.body ? JSON.parse(event.body) : {}) : event
-    const { matchId, playIds, betAmount } = body
+    const { matchId, matchIds, playIds, betAmount, isParlay } = body
+
+    // 统一处理 matchIds
+    const allMatchIds = matchIds && matchIds.length ? matchIds : (matchId ? [matchId] : [])
 
     // 参数校验
-    if (!matchId || !playIds || !playIds.length || !betAmount) return fail('缺少必填参数')
+    if (!allMatchIds.length || !playIds || !playIds.length || !betAmount) return fail('缺少必填参数')
     if (playIds.length === 0) return fail('请至少选择一个玩法')
+
+    // 串关至少需要2个不同场次
+    if (isParlay && allMatchIds.length < 2) return fail('串关至少需要选择2个不同场次')
+
+    // 串关：场次不能重复
+    if (isParlay) {
+      const uniqueMatchIds = [...new Set(allMatchIds)]
+      if (uniqueMatchIds.length !== allMatchIds.length) return fail('串关不能重复选择同一场次')
+    }
 
     // 获取系统配置的下注限额
     const configs = await db.collection('system-config').get()
@@ -81,29 +114,39 @@ exports.main = async (event, context) => {
     if (betAmount < minBet) return fail('下注金额不能低于 ¥' + minBet.toFixed(2))
     if (betAmount > maxBet) return fail('下注金额不能超过 ¥' + maxBet.toFixed(2))
 
-    // 验证赛事状态（只能下注未开始的赛事）
-    const match = await db.collection('matches').doc(matchId).get()
-    if (!match.data || match.data.length === 0) return fail('赛事不存在')
-    if (match.data[0].status !== 'upcoming') return fail('该赛事已开始，不可下注')
-    if (new Date(match.data[0].startTime) <= new Date()) return fail('赛事已开始，不可下注')
-
-    // 验证所有玩法是否属于同一赛事
+    // 验证所有玩法
     const plays = await db.collection('plays').where({ _id: db.command.in(playIds) }).get()
     if (!plays.data || plays.data.length !== playIds.length) return fail('存在无效的玩法')
 
-    for (const play of plays.data) {
-      if (play.matchId !== matchId) return fail('所有玩法必须属于同一赛事')
+    // 构建 playId -> play 的映射
+    const playMap = {}
+    plays.data.forEach(p => { playMap[p._id] = p })
+
+    // 验证每个 play 对应的 matchId 与传入的 matchIds 一致
+    for (const playId of playIds) {
+      const play = playMap[playId]
+      if (!play) return fail('玩法 ' + playId + ' 不存在')
+      if (!allMatchIds.includes(play.matchId)) return fail('玩法与场次不匹配')
+    }
+
+    // 验证每场比赛的状态
+    for (const mId of allMatchIds) {
+      const match = await db.collection('matches').doc(mId).get()
+      if (!match.data || match.data.length === 0) return fail('赛事 ' + mId + ' 不存在')
+      if (match.data[0].status !== 'upcoming') return fail('赛事 ' + match.data[0].name + ' 已开始，不可下注')
+      if (new Date(match.data[0].startTime) <= new Date()) return fail('赛事 ' + match.data[0].name + ' 已开始，不可下注')
     }
 
     // 计算总赔率
-    const isParlay = playIds.length > 1
     let totalOdds = 1
     const orderItems = []
 
-    for (const play of plays.data) {
+    for (const playId of playIds) {
+      const play = playMap[playId]
       totalOdds *= play.odds
       orderItems.push({
         playId: play._id,
+        matchId: play.matchId,  // 记录每个玩法所属的场次
         oddsSnapshot: play.odds,
         playName: play.name,
         categoryName: ''
@@ -112,7 +155,7 @@ exports.main = async (event, context) => {
 
     // 补充分类名称快照
     await Promise.all(orderItems.map(async item => {
-      const play = plays.data.find(p => p._id === item.playId)
+      const play = playMap[item.playId]
       if (play && play.categoryId) {
         const cat = await db.collection('play-categories').doc(play.categoryId).get()
         item.categoryName = (cat.data && cat.data[0] && cat.data[0].name) || ''
@@ -124,17 +167,20 @@ exports.main = async (event, context) => {
 
     // 创建订单
     const orderNo = generateOrderNo()
-    const orderRes = await db.collection('orders').add({
+    const orderData = {
       orderNo,
       userId: user._id,
-      matchId,
+      matchIds: allMatchIds,         // 支持多场次（串关）
+      matchId: allMatchIds[0],       // 兼容旧字段：保留第一个matchId
       betAmount: Number(betAmount),
       totalOdds,
       winAmount: 0,
       status: 'pending',
-      isParlay,
+      isParlay: !!isParlay,
       createTime: new Date()
-    })
+    }
+
+    const orderRes = await db.collection('orders').add(orderData)
 
     // 创建订单明细
     await Promise.all(orderItems.map(item => {
@@ -149,7 +195,9 @@ exports.main = async (event, context) => {
       orderNo,
       totalOdds,
       winAmount,
-      betAmount: Number(betAmount)
+      betAmount: Number(betAmount),
+      matchIds: allMatchIds,
+      isParlay: !!isParlay
     }, '下单成功')
   } catch (e) {
     console.error('user-order error:', e)

@@ -18,7 +18,6 @@ exports.main = async (event, context) => {
     if (method === 'GET' && path.includes('/stats')) {
       const { matchId, username } = query
 
-      // 如果传了 username，查对应的用户 _id
       let resolvedUserId = null
       if (username) {
         const users = await db.collection('users').where({ username: new RegExp(username, 'i') }).get()
@@ -27,7 +26,6 @@ exports.main = async (event, context) => {
         }
       }
 
-      // 某用户当天下单总额（用当天 UTC 零点，与 DB 中 createTime 的 UTC 存储对齐）
       let dailyUserTotal = 0
       if (resolvedUserId) {
         const now = new Date()
@@ -43,19 +41,26 @@ exports.main = async (event, context) => {
         dailyUserTotal = (dailyOrders.data || []).reduce((sum, o) => sum + o.betAmount, 0)
       }
 
-      // 选中用户的某赛事中奖总额
+      // 选中用户的某赛事中奖总额（兼容 matchId 和 matchIds）
       let userMatchWinTotal = 0
       if (resolvedUserId && matchId) {
-        const winOrders = await db.collection('orders')
-          .where({ userId: resolvedUserId, matchId, status: db.command.in(['won', 'settled']) })
+        const allWinOrders = await db.collection('orders')
+          .where({
+            userId: resolvedUserId,
+            status: db.command.in(['won', 'settled'])
+          })
           .get()
-        userMatchWinTotal = (winOrders.data || []).reduce((sum, o) => sum + (o.winAmount || 0), 0)
+        userMatchWinTotal = (allWinOrders.data || [])
+          .filter(o => (o.matchIds && o.matchIds.includes(matchId)) || o.matchId === matchId)
+          .reduce((sum, o) => sum + (o.winAmount || 0), 0)
       }
 
-      // 总订单数（受筛选条件影响）
+      // 总订单数
       const whereStats = {}
-      if (matchId) whereStats.matchId = matchId
       if (resolvedUserId) whereStats.userId = resolvedUserId
+      if (matchId) {
+        whereStats.$or = [{ matchId: matchId }, { matchIds: db.command.in([matchId]) }]
+      }
       const totalOrders = await db.collection('orders').where(whereStats).count()
 
       return ok({
@@ -70,10 +75,12 @@ exports.main = async (event, context) => {
       const { matchId, username, status, page = 1, pageSize = 20 } = query
       const where = {}
 
-      if (matchId) where.matchId = matchId
       if (status) where.status = status
+      // 兼容 matchId 和 matchIds 字段
+      if (matchId) {
+        where.$or = [{ matchId: matchId }, { matchIds: db.command.in([matchId]) }]
+      }
 
-      // 如果有用户名搜索，先查用户ID
       if (username) {
         const users = await db.collection('users').where({ username: new RegExp(username, 'i') }).get()
         const userIds = (users.data || []).map(u => u._id)
@@ -95,14 +102,30 @@ exports.main = async (event, context) => {
       // 补充关联信息
       const list = await Promise.all((res.data || []).map(async order => {
         const items = await db.collection('order-items').where({ orderId: order._id }).get()
-        const [user, match] = await Promise.all([
-          db.collection('users').doc(order.userId).get(),
-          db.collection('matches').doc(order.matchId).get()
-        ])
+
+        // 获取关联的所有赛事（兼容 matchId 和 matchIds）
+        const matchIds = order.matchIds || (order.matchId ? [order.matchId] : [])
+        const matchesData = []
+        for (const mId of matchIds) {
+          const match = await db.collection('matches').doc(mId).get()
+          const mData = (match.data && match.data[0]) || {}
+          if (mData._id) {
+            matchesData.push({
+              _id: mData._id,
+              name: mData.name || '',
+              teamA: mData.teamA || '',
+              teamB: mData.teamB || ''
+            })
+          }
+        }
+
+        const user = await db.collection('users').doc(order.userId).get()
+
         return {
           ...order,
           username: (user.data && user.data[0] && user.data[0].username) || '',
-          matchName: (match.data && match.data[0] && match.data[0].name) || '',
+          matchName: matchesData.length === 1 ? matchesData[0].name : (matchesData.map(m => m.name).join(' / ')),
+          matches: matchesData,
           items: items.data || []
         }
       }))

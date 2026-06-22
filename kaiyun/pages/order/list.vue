@@ -4,22 +4,39 @@
       <view class="order-card" v-for="order in orders" :key="order._id" @click="goDetail(order)">
         <view class="order-head">
           <text class="order-no">单号: {{ order.orderNo }}</text>
-          <text class="order-status" :class="order.status">{{ statusMap[order.status] }}</text>
+          <view class="head-right">
+            <text class="parlay-tag" v-if="order.isParlay">串关</text>
+            <text class="order-status" :class="order.status">{{ statusMap[order.status] }}</text>
+          </view>
         </view>
         <view class="order-body">
-          <text class="match-name">{{ order.matchName }}</text>
-          <text class="match-teams" v-if="order.teamA || order.teamB">{{ order.teamA }} VS {{ order.teamB }}</text>
+          <!-- 单关：显示一场比赛 -->
+          <template v-if="!order.isParlay || !order.matches || order.matches.length <= 1">
+            <text class="match-name">{{ order.matchName }}</text>
+            <text class="match-teams" v-if="order.teamA || order.teamB">{{ order.teamA }} VS {{ order.teamB }}</text>
+          </template>
+          <!-- 串关：显示多场比赛 -->
+          <template v-else>
+            <view class="parlay-matches">
+              <view class="parlay-match" v-for="(m, i) in order.matches" :key="m._id || i">
+                <text class="parlay-match-text">{{ m.teamA }} VS {{ m.teamB }}</text>
+              </view>
+            </view>
+          </template>
           <view class="play-items">
             <view v-for="item in order.items" :key="item._id" class="play-line">
               <text>{{ item.playName }}</text>
               <text class="play-odds">@{{ item.oddsSnapshot }}</text>
               <text class="play-cat" v-if="item.categoryName">{{ item.categoryName }}</text>
+              <text class="play-match" v-if="order.isParlay && (item.teamA || item.matchName)">
+                {{ item.teamA ? (item.teamA + ' VS ' + item.teamB) : item.matchName }}
+              </text>
             </view>
           </view>
         </view>
         <view class="order-foot">
           <text>下注: ¥{{ order.betAmount }}</text>
-          <text v-if="order.status === 'won'">中奖: ¥{{ order.winAmount }}</text>
+          <text v-if="order.status === 'won' || order.status === 'settled'">中奖: ¥{{ order.winAmount }}</text>
         </view>
         <view class="order-time">
           <text>{{ formatTime(order.createTime) }}</text>
@@ -56,7 +73,7 @@ const loadOrders = async () => {
   try {
     const res = await uniCloud.callFunction({
       name: 'user-order',
-      data: { token: uni.getStorageSync('token'), action: 'list' }
+      data: { token: uni.getStorageSync('token') }
     })
     if (res.result && res.result.code === 0) {
       orders.value = res.result.data.list || []
@@ -76,6 +93,11 @@ onShow(() => { loadOrders() })
   .order-head {
     display: flex; justify-content: space-between; margin-bottom: 16rpx;
     .order-no { font-size: 24rpx; color: #999; }
+    .head-right { display: flex; align-items: center; gap: 8rpx; }
+    .parlay-tag {
+      font-size: 22rpx; color: #fff; background: #1a237e;
+      padding: 2rpx 12rpx; border-radius: 12rpx;
+    }
     .order-status { font-size: 24rpx; padding: 4rpx 16rpx; border-radius: 20rpx; }
     .pending { background: #fff3e0; color: #ef6c00; }
     .won { background: #e8f5e9; color: #2e7d32; }
@@ -83,12 +105,22 @@ onShow(() => { loadOrders() })
     .settled { background: #e3f2fd; color: #1565c0; }
   }
   .order-body {
-    margin-bottom: 16rpx; .match-name { font-weight: bold; font-size: 30rpx; }
+    margin-bottom: 16rpx;
+    .match-name { font-weight: bold; font-size: 30rpx; }
     .match-teams { display: block; font-size: 26rpx; color: #1a237e; margin-top: 6rpx; font-weight: 500; }
+    .parlay-matches {
+      margin-bottom: 8rpx;
+      .parlay-match {
+        padding: 8rpx 0; border-bottom: 1rpx dashed #eee;
+        &:last-child { border-bottom: none; }
+        .parlay-match-text { font-size: 26rpx; color: #1a237e; font-weight: 500; }
+      }
+    }
     .play-items { margin-top: 8rpx;
       .play-line { display: flex; align-items: center; flex-wrap: wrap; gap: 8rpx; padding: 4rpx 0; }
       .play-odds { font-size: 26rpx; color: #d32f2f; font-weight: bold; }
       .play-cat { font-size: 22rpx; color: #999; background: #f5f5f5; padding: 2rpx 10rpx; border-radius: 8rpx; }
+      .play-match { font-size: 22rpx; color: #666; background: #e8eaf6; padding: 2rpx 10rpx; border-radius: 8rpx; }
     }
   }
   .order-foot { display: flex; justify-content: space-between; font-size: 28rpx; color: #333; }
