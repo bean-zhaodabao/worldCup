@@ -17,6 +17,12 @@
       "title": "排序",
       "default": 0
     },
+    "deleted": {
+      "bsonType": "bool",
+      "title": "逻辑删除标记",
+      "description": "true表示已逻辑删除，页面上不再显示",
+      "default": false
+    },
     "createTime": { "bsonType": "date" }
   }
 }

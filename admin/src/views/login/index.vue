@@ -72,7 +72,7 @@ const handleLogin = async () => {
       ElMessage.error(res.message || '登录失败')
     }
   } catch (e) {
-    ElMessage.error('网络错误，请重试')
+    ElMessage.error(e.message || '网络错误，请重试')
   }
   loading.value = false
 }

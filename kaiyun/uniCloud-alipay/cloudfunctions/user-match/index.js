@@ -15,16 +15,24 @@ exports.main = async (event, context) => {
       .orderBy('startTime', 'desc')
       .get()
 
-    const matches = matchesRes.data || []
+    const now = new Date()
+    // 过滤：已逻辑删除的赛事不展示；未开始的赛事只展示 startTime 在未来的
+    const matches = (matchesRes.data || []).filter(m => {
+      if (m.deleted) return false
+      if (m.status === 'upcoming') return new Date(m.startTime) > now
+      return true  // live / finished / settled 照常展示
+    })
 
     // 只返回有玩法的赛事（且未设置玩法的赛事对用户不可见）
     const result = []
     for (const match of matches) {
-      const plays = await db.collection('plays').where({ matchId: match._id }).get()
-      if (!plays.data || plays.data.length === 0) continue
+      const playsRes = await db.collection('plays').where({ matchId: match._id }).get()
+      // 过滤已下架的玩法
+      const activePlays = (playsRes.data || []).filter(p => !p.deleted)
+      if (activePlays.length === 0) continue
 
       // 分组：按小类 -> 大类
-      const playList = await Promise.all((plays.data).map(async play => {
+      const playList = await Promise.all(activePlays.map(async play => {
         const cat = await db.collection('play-categories').doc(play.categoryId).get()
         const catData = cat.data && cat.data[0] || {}
         let bigCatName = ''

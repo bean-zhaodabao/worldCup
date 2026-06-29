@@ -14,10 +14,14 @@
         <el-table-column prop="name" label="玩法名称" min-width="150" />
         <el-table-column prop="odds" label="赔率" width="80" />
         <el-table-column label="中奖" width="80"><template #default="{row}"><el-tag :type="row.isWin?'success':'info'">{{ row.isWin?'是':'否' }}</el-tag></template></el-table-column>
-        <el-table-column label="操作" width="200">
+        <el-table-column label="状态" width="80"><template #default="{row}"><el-tag v-if="row.deleted" type="danger">已下架</el-tag></template></el-table-column>
+        <el-table-column label="操作" width="280">
           <template #default="{row}">
             <el-button size="small" @click="openDialog(row)">编辑</el-button>
             <el-button size="small" :type="row.isWin?'warning':'success'" @click="toggleWin(row)">{{ row.isWin?'取消中奖':'设为中奖' }}</el-button>
+            <el-popconfirm :title="row.deleted ? '确定物理删除？此操作不可恢复' : '确定删除？已有订单将下架处理'" @confirm="doDelete(row)">
+              <template #reference><el-button size="small" type="danger">{{ row.deleted ? '删除' : '下架' }}</el-button></template>
+            </el-popconfirm>
           </template>
         </el-table-column>
       </el-table>
@@ -40,7 +44,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { getPlayList, createPlay, updatePlay, setPlayWin, getMatchList, getCategoryTree } from '@/api'
+import { getPlayList, createPlay, updatePlay, setPlayWin, deletePlay, getMatchList, getCategoryTree } from '@/api'
 
 const loading=ref(false),saving=ref(false),list=ref([]),page=ref(1),ps=ref(20),total=ref(0)
 const qf=reactive({matchId:''})
@@ -54,6 +58,7 @@ const dialogTitle=computed(()=>isEdit.value?'编辑玩法':'新增玩法')
 const openDialog=(row)=>{isEdit.value=!!row;if(row){editId.value=row._id;form.matchId=row.matchId;form.categoryId=row.categoryId;form.name=row.name;form.label=row.label||'';form.odds=row.odds}else{editId.value='';Object.assign(form,{matchId:'',categoryId:'',name:'',label:'',odds:1.87})};dialogVisible.value=true}
 const doSave=async()=>{if(!form.matchId||!form.categoryId||!form.name){ElMessage.warning('请填写必填项');return};saving.value=true;try{isEdit.value?await updatePlay(editId.value,{...form,_oldOdds:list.value.find(p=>p._id===editId.value)?.odds}):await createPlay({...form});dialogVisible.value=false;loadList();ElMessage.success('保存成功')}catch(e){ElMessage.error(e.message||'操作失败')};saving.value=false}
 const toggleWin=async(row)=>{try{await setPlayWin(row._id,!row.isWin);ElMessage.success('已更新');loadList()}catch(e){ElMessage.error(e.message||'操作失败')}}
+const doDelete=async(row)=>{try{await deletePlay(row._id);ElMessage.success(row.deleted?'已删除':'已下架');loadList()}catch(e){ElMessage.error(e.message||'删除失败')}}
 </script>
 
 <style lang="scss" scoped>

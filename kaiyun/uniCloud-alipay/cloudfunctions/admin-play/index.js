@@ -221,11 +221,15 @@ exports.main = async (event, context) => {
       return ok(null, '玩法更新成功')
     }
 
-    // ============ DELETE - 删除玩法 ============
+    // ============ DELETE - 删除/下架玩法 ============
     if (method === 'DELETE') {
       const id = path.split('/').pop()
       const orderItems = await db.collection('order-items').where({ playId: id }).count()
-      if (orderItems.total > 0) return err('该玩法已有订单引用，无法删除')
+      if (orderItems.total > 0) {
+        // 已有订单引用 → 下架（逻辑删除），移动端不可见
+        await db.collection('plays').doc(id).update({ deleted: true, updateTime: new Date() })
+        return ok(null, '该玩法已有订单引用，已下架（移动端不再显示）')
+      }
       await db.collection('plays').doc(id).remove()
       return ok(null, '玩法已删除')
     }

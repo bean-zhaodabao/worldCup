@@ -34,6 +34,12 @@
       "description": "管理员手动设定",
       "default": false
     },
+    "deleted": {
+      "bsonType": "bool",
+      "title": "下架标记",
+      "description": "true表示已下架，移动端不可见",
+      "default": false
+    },
     "createTime": { "bsonType": "date" },
     "updateTime": { "bsonType": "date" }
   }

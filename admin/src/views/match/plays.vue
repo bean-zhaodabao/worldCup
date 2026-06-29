@@ -15,10 +15,13 @@
         <el-table-column label="中奖" width="120">
           <template #default="{row}"><el-switch v-model="row.isWin" @change="(v)=>setWin(row,v)" /></template>
         </el-table-column>
+        <el-table-column label="状态" width="80">
+          <template #default="{row}"><el-tag v-if="row.deleted" type="danger">已下架</el-tag></template>
+        </el-table-column>
         <el-table-column label="操作" width="180">
           <template #default="{row}">
             <el-button size="small" @click="openPlayDialog(row)">编辑</el-button>
-            <el-popconfirm title="确定删除？" @confirm="doDelete(row)"><template #reference><el-button size="small" type="danger">删除</el-button></template></el-popconfirm>
+            <el-popconfirm :title="row.deleted ? '确定物理删除？此操作不可恢复' : '确定删除？已有订单将下架处理'" @confirm="doDelete(row)"><template #reference><el-button size="small" type="danger">{{ row.deleted ? '删除' : '下架' }}</el-button></template></el-popconfirm>
           </template>
         </el-table-column>
       </el-table>
@@ -95,7 +98,7 @@ const doSavePlay=async()=>{
   catch(e){ElMessage.error(e.message||'操作失败')}
   saving.value=false
 }
-const doDelete=async(row)=>{try{await deletePlay(row._id);ElMessage.success('已删除');loadList()}catch(e){ElMessage.error(e.message||'删除失败')}}
+const doDelete=async(row)=>{try{await deletePlay(row._id);ElMessage.success(row.deleted?'已删除':'已下架');loadList()}catch(e){ElMessage.error(e.message||'删除失败')}}
 const updateOdds=async(row,val)=>{try{await updatePlay(row._id,{odds:val,_oldOdds:row.odds})}catch(e){ElMessage.error(e.message||'失败');loadList()}}
 const setWin=async(row,val)=>{try{await setPlayWin(row._id,val)}catch(e){ElMessage.error(e.message||'失败');loadList()}}
 

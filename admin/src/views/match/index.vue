@@ -35,7 +35,7 @@
             <el-button size="small" @click="$router.push('/match/'+row._id+'/plays')">玩法</el-button>
             <el-button size="small" type="warning" @click="advanceStatus(row)" v-if="row.status!=='settled'">{{ actionLabel(row.status) }}</el-button>
             <el-button size="small" @click="openDialog(row)">编辑</el-button>
-            <el-popconfirm title="确定删除？" @confirm="doDelete(row)"><template #reference><el-button size="small" type="danger">删除</el-button></template></el-popconfirm>
+            <el-popconfirm title="确定删除？已有订单的赛事将下架处理" @confirm="doDelete(row)"><template #reference><el-button size="small" type="danger">删除</el-button></template></el-popconfirm>
           </template>
         </el-table-column>
       </el-table>

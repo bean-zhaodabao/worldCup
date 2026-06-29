@@ -15,7 +15,7 @@ exports.main = async (event, context) => {
     // GET - 获取分类树
     if (method === 'GET') {
       const res = await db.collection('play-categories').orderBy('sort', 'asc').get()
-      const list = res.data || []
+      const list = (res.data || []).filter(c => !c.deleted)
       // 构建树形结构
       const bigCategories = list.filter(c => !c.parentId)
       const smallCategories = list.filter(c => c.parentId)
@@ -58,9 +58,13 @@ exports.main = async (event, context) => {
       // 检查是否有子分类
       const children = await db.collection('play-categories').where({ parentId: id }).count()
       if (children.total > 0) return err('请先删除该分类下的所有小类')
-      // 检查是否有玩法引用
+      // 检查是否有玩法引用 → 逻辑删除
       const plays = await db.collection('plays').where({ categoryId: id }).count()
-      if (plays.total > 0) return err('该分类下有玩法引用，无法删除')
+      if (plays.total > 0) {
+        await db.collection('play-categories').doc(id).update({ deleted: true })
+        return ok(null, '该分类有玩法引用，已逻辑删除（页面不再显示）')
+      }
+      // 无引用 → 物理删除
       await db.collection('play-categories').doc(id).remove()
       return ok(null, '分类已删除')
     }

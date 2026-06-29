@@ -38,6 +38,12 @@
       "description": "未开始->进行中->已结束->已结算",
       "default": "upcoming"
     },
+    "deleted": {
+      "bsonType": "bool",
+      "title": "逻辑删除标记",
+      "description": "true表示已逻辑删除，页面不再显示",
+      "default": false
+    },
     "createTime": { "bsonType": "date" },
     "updateTime": { "bsonType": "date" }
   }

@@ -31,6 +31,10 @@ http.interceptors.response.use(
       window.location.href = '/login'
       return Promise.reject(new Error(data.message || '未登录'))
     }
+    // 业务层非 0 错误码 → 统一按异常处理，让调用方的 catch 块能正确显示错误信息
+    if (data && data.code !== undefined && data.code !== 0) {
+      return Promise.reject(new Error(data.message || '操作失败'))
+    }
     return data
   },
   error => {

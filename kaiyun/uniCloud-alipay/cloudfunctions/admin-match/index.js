@@ -19,6 +19,8 @@ exports.main = async (event, context) => {
       const where = {}
       if (name) where.name = new RegExp(name, 'i')
       if (status) where.status = status
+      // 过滤已逻辑删除的赛事
+      where.deleted = db.command.neq(true)
 
       const total = await db.collection('matches').where(where).count()
       const res = await db.collection('matches')
@@ -75,12 +77,21 @@ exports.main = async (event, context) => {
       return ok(null, '赛事更新成功')
     }
 
-    // DELETE - 删除赛事
+    // DELETE - 删除/下架赛事
     if (method === 'DELETE') {
       const id = event.path.split('/').pop()
       // 检查是否有订单关联
       const orderCount = await db.collection('orders').where({ matchId: id }).count()
-      if (orderCount.total > 0) return err('该赛事已有订单，无法删除')
+      if (orderCount.total > 0) {
+        // 已有订单 → 逻辑删除
+        await db.collection('matches').doc(id).update({ deleted: true, updateTime: new Date() })
+        await writeLog(db, {
+          adminId: admin._id, adminName: admin.username,
+          action: 'match_status', targetType: 'matches', targetId: id,
+          detail: `下架赛事(逻辑删除): ${id}`
+        })
+        return ok(null, '该赛事已有订单，已下架（页面不再显示）')
+      }
 
       await db.collection('plays').where({ matchId: id }).remove()
       await db.collection('matches').doc(id).remove()
