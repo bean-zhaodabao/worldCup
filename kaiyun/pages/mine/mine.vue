@@ -1,7 +1,7 @@
 <template>
   <view class="mine-page">
     <view class="user-card">
-      <image class="avatar" src="/static/logo.png"></image>
+      <image class="avatar" src="/static/football.png"></image>
       <text class="username">{{ username }}</text>
     </view>
 
