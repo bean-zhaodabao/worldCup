@@ -17,21 +17,46 @@
       <text class="status">{{ statusMap[match.status] || '未知' }}</text>
     </view>
 
-    <!-- 玩法列表（按分类分组）- 单选模式 -->
-    <view class="play-section" v-for="cat in categoryPlays" :key="cat.name">
-      <view class="section-title">{{ cat.name }}</view>
-      <view class="play-grid">
+    <!-- 大类Tab栏（可左右滑动） -->
+    <scroll-view scroll-x class="category-tabs" :show-scrollbar="false">
+      <view
+        class="tab-item"
+        :class="{ active: activeTab === 'all' }"
+        @click="activeTab = 'all'"
+      >全部玩法</view>
+      <view
+        v-for="cat in categoryPlays"
+        :key="cat.name"
+        class="tab-item"
+        :class="{ active: activeTab === cat.name }"
+        @click="activeTab = cat.name"
+      >{{ cat.name }}</view>
+    </scroll-view>
+
+    <!-- 玩法列表（大类 → 小类 → 玩法） -->
+    <view class="play-section" v-for="bigCat in displayCategories" :key="bigCat.name">
+      <!-- 大类标题（仅全部玩法tab时显示） -->
+      <view class="big-cat-title" v-if="activeTab === 'all'">{{ bigCat.name }}</view>
+
+      <!-- 小类 -->
+      <view class="sub-category" v-for="sub in bigCat.subCategories" :key="sub.name">
+        <view class="sub-cat-title">{{ sub.name }}</view>
         <view
-          class="play-item"
-          v-for="play in cat.plays"
-          :key="play._id"
-          @click="selectPlay(play)"
-          :class="{
-            selected: selectedPlay._id === play._id
-          }"
+          class="play-grid"
+          :style="{ gridTemplateColumns: getGridColumns(sub.plays.length) }"
         >
-          <text class="play-name">{{ play.name }}</text>
-          <text class="play-odds">{{ play.odds }}</text>
+          <view
+            class="play-item"
+            v-for="play in sub.plays"
+            :key="play._id"
+            @click="selectPlay(play)"
+            :class="{
+              selected: selectedPlay._id === play._id
+            }"
+          >
+            <text class="play-name">{{ play.name }}</text>
+            <text class="play-odds">{{ play.odds }}</text>
+          </view>
         </view>
       </view>
     </view>
@@ -124,6 +149,36 @@ const showSingleSheet = ref(false) // 单关弹窗
 const showCartSheet = ref(false)   // 串关弹窗
 const categoryPlays = ref([])
 const loaded = ref(false)
+const activeTab = ref('all')       // 当前选中的大类tab，'all'=全部玩法
+
+/** 将每个大类的玩法按小类(categoryName)二次分组 */
+const subGroupedCategories = computed(() => {
+  return categoryPlays.value.map(bigCat => {
+    const subMap = {}
+    for (const play of bigCat.plays) {
+      const key = play.categoryName || bigCat.name
+      if (!subMap[key]) subMap[key] = { name: key, plays: [] }
+      subMap[key].plays.push(play)
+    }
+    return {
+      name: bigCat.name,
+      subCategories: Object.values(subMap)
+    }
+  })
+})
+
+/** 根据选中的tab过滤要显示的大类 */
+const displayCategories = computed(() => {
+  if (activeTab.value === 'all') return subGroupedCategories.value
+  return subGroupedCategories.value.filter(c => c.name === activeTab.value)
+})
+
+/** 根据玩法数量返回 grid-template-columns */
+const getGridColumns = (count) => {
+  if (count === 1) return '1fr'
+  if (count === 3) return '1fr 1fr 1fr'
+  return '1fr 1fr'  // 2, 4, 5, 6...
+}
 
 const statusMap = { upcoming: '未开始', live: '进行中', finished: '已结束', settled: '已结算' }
 
@@ -303,12 +358,38 @@ onLoad(async (options) => {
   .status { display: inline-block; margin-top: 10rpx; font-size: 24rpx; padding: 4rpx 20rpx; border-radius: 20rpx; background: rgba(255,255,255,0.2); }
 }
 
+// ============ 大类Tab栏 ============
+.category-tabs {
+  white-space: nowrap; padding: 16rpx 20rpx; background: #fff;
+  border-bottom: 1rpx solid #eee;
+  .tab-item {
+    display: inline-block; padding: 12rpx 24rpx; font-size: 26rpx; color: #666;
+    border-radius: 28rpx; margin-right: 12rpx; background: #f5f5f5;
+    transition: all 0.2s;
+    &.active { background: #1a237e; color: #fff; font-weight: bold; }
+  }
+}
+
 .play-section {
   background: #fff; margin: 20rpx; border-radius: 16rpx; padding: 20rpx;
-  .section-title { font-size: 30rpx; font-weight: bold; margin-bottom: 16rpx; color: #333; }
-  .play-grid { display: flex; flex-wrap: wrap; gap: 12rpx; }
+  .big-cat-title {
+    font-size: 30rpx; font-weight: bold; color: #1a237e;
+    padding-bottom: 12rpx; margin-bottom: 16rpx; border-bottom: 2rpx solid #e0e0e0;
+  }
+}
+
+.sub-category {
+  margin-bottom: 20rpx;
+  &:last-child { margin-bottom: 0; }
+  .sub-cat-title {
+    font-size: 26rpx; color: #666; margin-bottom: 10rpx; padding-left: 8rpx;
+    border-left: 4rpx solid #1a237e; line-height: 1.2;
+  }
+  .play-grid {
+    display: grid; gap: 12rpx;
+  }
   .play-item {
-    width: calc(50% - 6rpx); padding: 16rpx; background: #f5f5f5; border-radius: 12rpx;
+    padding: 16rpx; background: #f5f5f5; border-radius: 12rpx;
     text-align: center; border: 2rpx solid transparent;
     .play-name { display: block; font-size: 26rpx; color: #333; }
     .play-odds { display: block; font-size: 32rpx; color: #d32f2f; font-weight: bold; margin-top: 8rpx; }
