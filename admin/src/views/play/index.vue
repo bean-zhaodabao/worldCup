@@ -12,6 +12,9 @@
         <el-table-column label="赛事" width="160"><template #default="{row}">{{ row.matchName }}</template></el-table-column>
         <el-table-column label="分类" width="180"><template #default="{row}">{{ row.categoryPath }}</template></el-table-column>
         <el-table-column prop="name" label="玩法名称" min-width="150" />
+        <el-table-column label="排序" width="90">
+          <template #default="{row}"><el-input-number v-model="row.sort" :min="0" size="small" controls-position="right" style="width:80px" @change="(v)=>updateSort(row,v)" /></template>
+        </el-table-column>
         <el-table-column prop="odds" label="赔率" width="80" />
         <el-table-column label="中奖" width="80"><template #default="{row}"><el-tag :type="row.isWin?'success':'info'">{{ row.isWin?'是':'否' }}</el-tag></template></el-table-column>
         <el-table-column label="状态" width="80"><template #default="{row}"><el-tag v-if="row.deleted" type="danger">已下架</el-tag></template></el-table-column>
@@ -34,6 +37,7 @@
         <el-form-item label="玩法分类"><el-cascader v-model="form.categoryId" :options="catOptions" :props="{value:'_id',label:'name',emitPath:false}" placeholder="选择小类" style="width:100%" /></el-form-item>
         <el-form-item label="玩法名称"><el-input v-model="form.name" /></el-form-item>
         <el-form-item label="标识"><el-input v-model="form.label" placeholder="可选" /></el-form-item>
+        <el-form-item label="排序"><el-input-number v-model="form.sort" :min="0" style="width:100%" /></el-form-item>
         <el-form-item label="赔率"><el-input-number v-model="form.odds" :min="1.01" :precision="2" :step="0.01" style="width:100%" /></el-form-item>
       </el-form>
       <template #footer><el-button @click="dialogVisible=false">取消</el-button><el-button type="primary" @click="doSave" :loading="saving">保存</el-button></template>
@@ -53,10 +57,11 @@ const matchOptions=ref([]),catOptions=ref([])
 onMounted(async()=>{const[ma,ca]=await Promise.all([getMatchList({pageSize:500}),getCategoryTree()]);matchOptions.value=ma.data.list||[];catOptions.value=(ca.data.tree||[]).map(b=>({_id:b._id,name:b.name,children:(b.children||[]).map(s=>({_id:s._id,name:s.name}))}));loadList()})
 
 const dialogVisible=ref(false),isEdit=ref(false),editId=ref('')
-const form=reactive({matchId:'',categoryId:'',name:'',label:'',odds:1.87})
+const form=reactive({matchId:'',categoryId:'',name:'',label:'',sort:0,odds:1.87})
 const dialogTitle=computed(()=>isEdit.value?'编辑玩法':'新增玩法')
-const openDialog=(row)=>{isEdit.value=!!row;if(row){editId.value=row._id;form.matchId=row.matchId;form.categoryId=row.categoryId;form.name=row.name;form.label=row.label||'';form.odds=row.odds}else{editId.value='';Object.assign(form,{matchId:'',categoryId:'',name:'',label:'',odds:1.87})};dialogVisible.value=true}
+const openDialog=(row)=>{isEdit.value=!!row;if(row){editId.value=row._id;form.matchId=row.matchId;form.categoryId=row.categoryId;form.name=row.name;form.label=row.label||'';form.sort=row.sort||0;form.odds=row.odds}else{editId.value='';Object.assign(form,{matchId:'',categoryId:'',name:'',label:'',sort:0,odds:1.87})};dialogVisible.value=true}
 const doSave=async()=>{if(!form.matchId||!form.categoryId||!form.name){ElMessage.warning('请填写必填项');return};saving.value=true;try{isEdit.value?await updatePlay(editId.value,{...form,_oldOdds:list.value.find(p=>p._id===editId.value)?.odds}):await createPlay({...form});dialogVisible.value=false;loadList();ElMessage.success('保存成功')}catch(e){ElMessage.error(e.message||'操作失败')};saving.value=false}
+const updateSort=async(row,val)=>{try{await updatePlay(row._id,{sort:val})}catch(e){ElMessage.error(e.message||'失败');loadList()}}
 const toggleWin=async(row)=>{try{await setPlayWin(row._id,!row.isWin);ElMessage.success('已更新');loadList()}catch(e){ElMessage.error(e.message||'操作失败')}}
 const doDelete=async(row)=>{try{await deletePlay(row._id);ElMessage.success(row.deleted?'已删除':'已下架');loadList()}catch(e){ElMessage.error(e.message||'删除失败')}}
 </script>

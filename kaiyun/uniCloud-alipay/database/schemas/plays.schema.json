@@ -40,6 +40,12 @@
       "description": "true表示已下架，移动端不可见",
       "default": false
     },
+    "sort": {
+      "bsonType": "int",
+      "title": "排序",
+      "description": "数字越小越靠前",
+      "default": 0
+    },
     "createTime": { "bsonType": "date" },
     "updateTime": { "bsonType": "date" }
   }

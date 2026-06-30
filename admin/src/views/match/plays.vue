@@ -9,6 +9,9 @@
         <el-table-column label="分类（大类/小类）" width="200"><template #default="{row}">{{ row.categoryPath || row.categoryName }}</template></el-table-column>
         <el-table-column prop="name" label="玩法名称" min-width="150" />
         <el-table-column prop="label" label="标识" width="100" />
+        <el-table-column label="排序" width="100">
+          <template #default="{row}"><el-input-number v-model="row.sort" :min="0" size="small" controls-position="right" style="width:90px" @change="(v)=>updateSort(row,v)" /></template>
+        </el-table-column>
         <el-table-column label="赔率" width="160">
           <template #default="{row}"><el-input-number v-model="row.odds" :min="1.01" :precision="2" :step="0.01" size="small" controls-position="right" style="width:130px" @change="(v)=>updateOdds(row,v)" /></template>
         </el-table-column>
@@ -35,6 +38,7 @@
         <el-form-item label="玩法名称"><el-input v-model="playForm.name" /></el-form-item>
         <el-form-item label="标识"><el-input v-model="playForm.label" placeholder="可选" /></el-form-item>
         <el-form-item label="赔率"><el-input-number v-model="playForm.odds" :min="1.01" :precision="2" :step="0.01" style="width:100%" /></el-form-item>
+        <el-form-item label="排序"><el-input-number v-model="playForm.sort" :min="0" style="width:100%" /></el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="playVisible=false">取消</el-button><el-button type="primary" @click="doSavePlay" :loading="saving">保存</el-button>
@@ -83,12 +87,12 @@ const loadMOptions = async () => {
 onMounted(()=>{loadMatch();loadList();loadCats();loadMOptions()})
 
 const playVisible=ref(false),isPlayEdit=ref(false),editPlayId=ref('')
-const playForm=reactive({categoryId:'',name:'',label:'',odds:1.87})
+const playForm=reactive({categoryId:'',name:'',label:'',sort:0,odds:1.87})
 const playDialogTitle=computed(()=>isPlayEdit.value?'编辑玩法':'新增玩法')
 const openPlayDialog=(row)=>{
   isPlayEdit.value=!!row
-  if(row){editPlayId.value=row._id;playForm.categoryId=row.categoryId;playForm.name=row.name;playForm.label=row.label||'';playForm.odds=row.odds}
-  else{editPlayId.value='';Object.assign(playForm,{categoryId:'',name:'',label:'',odds:1.87})}
+  if(row){editPlayId.value=row._id;playForm.categoryId=row.categoryId;playForm.name=row.name;playForm.label=row.label||'';playForm.sort=row.sort||0;playForm.odds=row.odds}
+  else{editPlayId.value='';Object.assign(playForm,{categoryId:'',name:'',label:'',sort:0,odds:1.87})}
   playVisible.value=true
 }
 const doSavePlay=async()=>{
@@ -99,6 +103,7 @@ const doSavePlay=async()=>{
   saving.value=false
 }
 const doDelete=async(row)=>{try{await deletePlay(row._id);ElMessage.success(row.deleted?'已删除':'已下架');loadList()}catch(e){ElMessage.error(e.message||'删除失败')}}
+const updateSort=async(row,val)=>{try{await updatePlay(row._id,{sort:val})}catch(e){ElMessage.error(e.message||'失败');loadList()}}
 const updateOdds=async(row,val)=>{try{await updatePlay(row._id,{odds:val,_oldOdds:row.odds})}catch(e){ElMessage.error(e.message||'失败');loadList()}}
 const setWin=async(row,val)=>{try{await setPlayWin(row._id,val)}catch(e){ElMessage.error(e.message||'失败');loadList()}}
 

@@ -78,6 +78,7 @@ exports.main = async (event, context) => {
       const total = await db.collection('plays').where(where).count()
       const res = await db.collection('plays')
         .where(where)
+        .orderBy('sort', 'asc')
         .skip((Number(page) - 1) * Number(pageSize))
         .limit(Number(pageSize))
         .get()
@@ -138,13 +139,13 @@ exports.main = async (event, context) => {
 
     // ============ POST - 新增玩法 ============
     if (method === 'POST') {
-      const { matchId, categoryId, name, label, odds } = body
+      const { matchId, categoryId, name, label, odds, sort } = body
       if (!matchId || !categoryId || !name || odds === undefined) return err('缺少必填字段')
       if (odds < 1.01) return err('赔率不能低于1.01')
 
       const doc = {
         matchId, categoryId, name, label: label || '',
-        odds: Number(odds), isWin: false,
+        odds: Number(odds), sort: Number(sort) || 0, isWin: false,
         createTime: new Date(), updateTime: new Date()
       }
       const res = await db.collection('plays').add(doc)
@@ -215,11 +216,12 @@ exports.main = async (event, context) => {
     // ============ PUT - 编辑玩法 ============
     if (method === 'PUT') {
       const id = path.split('/').pop()
-      const { name, label, categoryId, odds, _oldOdds } = body
+      const { name, label, categoryId, odds, sort, _oldOdds } = body
       const updateData = { updateTime: new Date() }
       if (name !== undefined) updateData.name = name
       if (label !== undefined) updateData.label = label
       if (categoryId !== undefined) updateData.categoryId = categoryId
+      if (sort !== undefined) updateData.sort = Number(sort)
       if (odds !== undefined) {
         if (odds < 1.01) return err('赔率不能低于1.01')
         updateData.odds = Number(odds)

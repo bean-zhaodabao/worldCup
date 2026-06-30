@@ -26,7 +26,7 @@ exports.main = async (event, context) => {
     // 只返回有玩法的赛事（且未设置玩法的赛事对用户不可见）
     const result = []
     for (const match of matches) {
-      const playsRes = await db.collection('plays').where({ matchId: match._id }).get()
+      const playsRes = await db.collection('plays').where({ matchId: match._id }).orderBy('sort', 'asc').get()
       // 过滤已下架的玩法
       const activePlays = (playsRes.data || []).filter(p => !p.deleted)
       if (activePlays.length === 0) continue
