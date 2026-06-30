@@ -45,6 +45,12 @@
       "default": false
     },
     "createTime": { "bsonType": "date" },
-    "updateTime": { "bsonType": "date" }
+    "updateTime": { "bsonType": "date" },
+    "oddsVersion": {
+      "bsonType": "int",
+      "title": "赔率版本号",
+      "description": "每次该比赛下任意玩法赔率变更时 +1，用于移动端轮询自动刷新",
+      "defaultValue": 0
+    }
   }
 }
