@@ -69,6 +69,12 @@ export function getOrderDetail(id) {
 export function getOrderStats(params) {
   return request.get('/admin-order/stats', { params })
 }
+export function deleteOrder(id) {
+  return request.patch('/admin-order/' + id + '/delete')
+}
+export function batchDeleteOrders(ids) {
+  return request.patch('/admin-order/batch-delete', { ids })
+}
 
 // ========== 用户管理 (admin-user) ==========
 export function getUserList(params) {

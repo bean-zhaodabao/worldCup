@@ -46,6 +46,12 @@
       "title": "是否串关",
       "default": false
     },
+    "deleted": {
+      "bsonType": "bool",
+      "title": "逻辑删除",
+      "description": "true表示已删除，管理端和移动端均不可见",
+      "default": false
+    },
     "createTime": { "bsonType": "date", "title": "下单时间" },
     "settleTime": { "bsonType": "date", "title": "结算时间" }
   }

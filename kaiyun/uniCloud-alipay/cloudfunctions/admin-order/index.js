@@ -35,6 +35,7 @@ exports.main = async (event, context) => {
         const dailyOrders = await db.collection('orders')
           .where({
             userId: resolvedUserId,
+            deleted: db.command.neq(true),
             createTime: db.command.gte(todayStart).and(db.command.lt(tomorrowStart))
           })
           .get()
@@ -47,7 +48,8 @@ exports.main = async (event, context) => {
         const allWinOrders = await db.collection('orders')
           .where({
             userId: resolvedUserId,
-            status: db.command.in(['won', 'settled'])
+            status: db.command.in(['won', 'settled']),
+            deleted: db.command.neq(true)
           })
           .get()
         userMatchWinTotal = (allWinOrders.data || [])
@@ -56,7 +58,7 @@ exports.main = async (event, context) => {
       }
 
       // 总订单数
-      const whereStats = {}
+      const whereStats = { deleted: db.command.neq(true) }
       if (resolvedUserId) whereStats.userId = resolvedUserId
       if (matchId) {
         whereStats.$or = [{ matchId: matchId }, { matchIds: db.command.in([matchId]) }]
@@ -73,7 +75,7 @@ exports.main = async (event, context) => {
     // ============ GET - 订单列表 ============
     if (method === 'GET') {
       const { matchId, username, status, page = 1, pageSize = 20 } = query
-      const where = {}
+      const where = { deleted: db.command.neq(true) }
 
       if (status) where.status = status
       // 兼容 matchId 和 matchIds 字段
@@ -131,6 +133,33 @@ exports.main = async (event, context) => {
       }))
 
       return ok({ list, total: total.total, page: Number(page), pageSize: Number(pageSize) })
+    }
+
+    // ============ PATCH /orders/batch-delete - 批量逻辑删除 ============
+    if (method === 'PATCH' && path.includes('/batch-delete')) {
+      const { ids } = body
+      if (!ids || !Array.isArray(ids) || ids.length === 0) return err('ids 参数错误')
+      await db.collection('orders').where({ _id: db.command.in(ids) }).update({ deleted: true })
+      await writeLog(db, {
+        adminId: admin._id, adminName: admin.username,
+        action: 'batch_delete_orders', targetType: 'orders', targetId: ids.join(','),
+        detail: '批量删除 ' + ids.length + ' 条订单'
+      })
+      return ok(null, '已删除 ' + ids.length + ' 条订单')
+    }
+
+    // ============ PATCH /orders/:id/delete - 单条逻辑删除 ============
+    if (method === 'PATCH' && path.includes('/delete')) {
+      const pathParts = path.split('/')
+      const id = pathParts[pathParts.length - 2]
+      if (!id) return err('缺少订单ID')
+      await db.collection('orders').doc(id).update({ deleted: true })
+      await writeLog(db, {
+        adminId: admin._id, adminName: admin.username,
+        action: 'delete_order', targetType: 'orders', targetId: id,
+        detail: '删除订单: ' + id
+      })
+      return ok(null, '订单已删除')
     }
 
     return err('不支持的请求方法', 405)

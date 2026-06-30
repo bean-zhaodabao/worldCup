@@ -21,9 +21,9 @@ exports.main = async (event, context) => {
       const page = Number(event.page || (isHttp ? (event.queryStringParameters || {}).page : 0) || 1)
       const pageSize = Number(event.pageSize || (isHttp ? (event.queryStringParameters || {}).pageSize : 0) || 20)
 
-      const total = await db.collection('orders').where({ userId: user._id }).count()
+      const total = await db.collection('orders').where({ userId: user._id, deleted: db.command.neq(true) }).count()
       const res = await db.collection('orders')
-        .where({ userId: user._id })
+        .where({ userId: user._id, deleted: db.command.neq(true) })
         .orderBy('createTime', 'desc')
         .skip((page - 1) * pageSize)
         .limit(pageSize)

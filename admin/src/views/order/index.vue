@@ -1,6 +1,6 @@
 <template>
   <div class="order-page">
-    <div class="page-header"><h2>订单管理</h2></div>
+    <div class="page-header"><h2>订单管理</h2><el-button type="danger" @click="batchDelete" :disabled="selectedRows.length===0">批量删除 ({{ selectedRows.length }})</el-button></div>
     <el-card style="margin-bottom:16px">
       <el-form :inline="true" :model="qf">
         <el-form-item label="赛事"><el-select v-model="qf.matchId" placeholder="全部" clearable filterable style="width:180px"><el-option v-for="m in matchOpts" :key="m._id" :label="m.name" :value="m._id" /></el-select></el-form-item>
@@ -17,7 +17,8 @@
     </el-row>
 
     <el-card>
-      <el-table :data="list" border stripe v-loading="loading">
+      <el-table :data="list" border stripe v-loading="loading" @selection-change="handleSelectionChange">
+        <el-table-column type="selection" width="45" />
         <el-table-column prop="orderNo" label="单号" width="180" />
         <el-table-column prop="username" label="用户" width="100" />
         <el-table-column label="赛事" width="140"><template #default="{row}">{{ row.matchName }}</template></el-table-column>
@@ -30,6 +31,9 @@
         <el-table-column prop="winAmount" label="中奖金额" width="100" />
         <el-table-column label="状态" width="90"><template #default="{row}"><el-tag :type="{pending:'warning',won:'success',lost:'info',settled:'info'}[row.status]">{{ {pending:'待开奖',won:'已中奖',lost:'未中奖',settled:'已结算'}[row.status] }}</el-tag></template></el-table-column>
         <el-table-column label="下单时间" width="160"><template #default="{row}">{{ fmt(row.createTime) }}</template></el-table-column>
+        <el-table-column label="操作" width="80">
+          <template #default="{row}"><el-popconfirm title="确定删除该订单？" @confirm="doDelete(row)"><template #reference><el-button size="small" type="danger">删除</el-button></template></el-popconfirm></template>
+        </el-table-column>
       </el-table>
       <el-pagination v-model:current-page="page" v-model:page-size="ps" :total="total" layout="total,prev,pager,next" style="margin-top:16px;justify-content:flex-end" @change="loadList" />
     </el-card>
@@ -38,9 +42,10 @@
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
-import { getOrderList, getOrderStats, getMatchList } from '@/api'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { getOrderList, getOrderStats, getMatchList, deleteOrder, batchDeleteOrders } from '@/api'
 
-const loading=ref(false),list=ref([]),page=ref(1),ps=ref(20),total=ref(0)
+const loading=ref(false),list=ref([]),page=ref(1),ps=ref(20),total=ref(0),selectedRows=ref([])
 const qf=reactive({matchId:'',username:'',status:''})
 const stats=reactive({dailyTotal:'0.00',winTotal:'0.00',orderCount:0})
 const matchOpts=ref([])
@@ -49,6 +54,19 @@ const loadList=async()=>{loading.value=true;try{const res=await getOrderList({..
 const refreshStats=async()=>{try{const res=await getOrderStats({matchId:qf.matchId,username:qf.username});Object.assign(stats,{dailyTotal:(res.data.dailyUserTotal||0).toFixed(2),winTotal:(res.data.userMatchWinTotal||0).toFixed(2),orderCount:res.data.orderCount})}catch(e){}}
 onMounted(async()=>{const m=await getMatchList({pageSize:500});matchOpts.value=m.data.list||[];loadList()})
 const fmt=(t)=>t?new Date(t).toLocaleString('zh-CN'):''
+const handleSelectionChange=(rows)=>{selectedRows.value=rows}
+const doDelete=async(row)=>{try{await deleteOrder(row._id);ElMessage.success('已删除');loadList()}catch(e){ElMessage.error(e.message||'删除失败')}}
+const batchDelete=async()=>{
+  if(selectedRows.value.length===0)return
+  try{
+    await ElMessageBox.confirm(`确定删除选中的 ${selectedRows.value.length} 条订单？`,'批量删除',{type:'warning'})
+    const ids=selectedRows.value.map(r=>r._id)
+    await batchDeleteOrders(ids)
+    ElMessage.success(`已删除 ${ids.length} 条订单`)
+    selectedRows.value=[]
+    loadList()
+  }catch(e){if(e!=='cancel')ElMessage.error(e.message||'删除失败')}
+}
 </script>
 
 <style lang="scss" scoped>
