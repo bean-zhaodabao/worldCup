@@ -139,9 +139,10 @@
 
 <script setup>
 import { ref, computed } from 'vue'
-import { onLoad } from '@dcloudio/uni-app'
+import { onLoad, onUnload } from '@dcloudio/uni-app'
 import BetSheet from '@/components/bet-sheet/bet-sheet.vue'
 import { betCart } from '@/stores/betCart.js'
+import { startPolling, stopPolling } from '@/utils/oddsPoller.js'
 
 const match = ref({})
 const selectedPlay = ref({})       // 当前选中的单个玩法
@@ -149,6 +150,7 @@ const showSingleSheet = ref(false) // 单关弹窗
 const showCartSheet = ref(false)   // 串关弹窗
 const categoryPlays = ref([])
 const loaded = ref(false)
+const currentOddsVersion = ref(0)
 const activeTab = ref('all')       // 当前选中的大类tab，'all'=全部玩法
 
 /** 将每个大类的玩法按小类(categoryName)二次分组 */
@@ -321,11 +323,8 @@ const handleCartConfirm = async (betData) => {
   }
 }
 
-// 加载赛事数据
-onLoad(async (options) => {
-  const matchId = options.id
-  if (!matchId) return
-
+/** 拉取比赛详情数据 */
+const fetchMatchData = async (matchId) => {
   try {
     const res = await uniCloud.callFunction({
       name: 'user-match',
@@ -334,14 +333,70 @@ onLoad(async (options) => {
     if (res.result && res.result.code === 0) {
       const matchData = (res.result.data.matches || []).find(m => m._id === matchId)
       if (matchData) {
+        const oldOddsMap = {}
+        for (const cat of categoryPlays.value) {
+          for (const p of cat.plays) {
+            oldOddsMap[p._id] = p.odds
+          }
+        }
         match.value = matchData
         categoryPlays.value = matchData.categoryPlays || []
+        currentOddsVersion.value = matchData.oddsVersion || 0
+
+        // 如果已选中的玩法赔率变了，更新 selectedPlay
+        if (selectedPlay.value._id) {
+          for (const cat of matchData.categoryPlays || []) {
+            const found = cat.plays.find(p => p._id === selectedPlay.value._id)
+            if (found) {
+              selectedPlay.value = { ...found }
+              break
+            }
+          }
+        }
+
+        // 同步购物车中的赔率
+        let cartChanged = false
+        for (const cat of matchData.categoryPlays || []) {
+          for (const p of cat.plays) {
+            if (oldOddsMap[p._id] !== undefined && oldOddsMap[p._id] !== p.odds) {
+              if (betCart.updateOdds(p._id, p.odds)) {
+                cartChanged = true
+              }
+            }
+          }
+        }
+        if (cartChanged) {
+          uni.showToast({ title: '购物车赔率已更新', icon: 'none', duration: 2000 })
+        }
       }
     }
   } catch (e) {
     console.error('加载赛事失败:', e)
   }
+}
+
+let pollingMatchId = ''
+
+onLoad(async (options) => {
+  const matchId = options.id
+  if (!matchId) return
+  pollingMatchId = matchId
+
+  await fetchMatchData(matchId)
   loaded.value = true
+
+  // 启动赔率轮询
+  startPolling({
+    matchIds: [matchId],
+    versions: { [matchId]: currentOddsVersion.value },
+    onChange: async (changedIds) => {
+      await fetchMatchData(matchId)
+    }
+  })
+})
+
+onUnload(() => {
+  stopPolling()
 })
 </script>
 
