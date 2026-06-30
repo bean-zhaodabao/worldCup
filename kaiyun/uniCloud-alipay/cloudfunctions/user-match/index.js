@@ -71,6 +71,7 @@ exports.main = async (event, context) => {
 
       result.push({
         _id: match._id,
+        oddsVersion: match.oddsVersion || 0,
         name: match.name,
         teamA: match.teamA,
         teamB: match.teamB,
