@@ -3,11 +3,15 @@
 // 入参: { matchIds: string[] }
 // 出参: { code: 0, data: { versions: { [matchId]: version } } }
 const db = uniCloud.database()
+const MAX_MATCH_IDS = 200
 
 exports.main = async (event, context) => {
   const matchIds = event.matchIds
   if (!matchIds || !Array.isArray(matchIds) || matchIds.length === 0) {
     return { code: 0, data: { versions: {} }, message: 'ok' }
+  }
+  if (matchIds.length > MAX_MATCH_IDS) {
+    return { code: -1, message: `每次最多查询 ${MAX_MATCH_IDS} 场比赛` }
   }
 
   try {
