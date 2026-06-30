@@ -83,6 +83,16 @@ export const betCart = {
     return state.items.some(i => i.matchId === matchId)
   },
 
+  /** 更新指定 play 的赔率（赔率变化时由外部调用） */
+  updateOdds(playId, newOdds) {
+    const item = state.items.find(i => i.playId === playId)
+    if (item && item.odds !== newOdds) {
+      item.odds = newOdds
+      return true  // 表示有变化
+    }
+    return false
+  },
+
   /** 清空购物车 */
   clear() {
     state.items.splice(0, state.items.length)
