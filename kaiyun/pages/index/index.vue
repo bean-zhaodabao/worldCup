@@ -57,8 +57,10 @@
 import { ref, computed } from 'vue'
 import BetSheet from '@/components/bet-sheet/bet-sheet.vue'
 import { betCart } from '@/stores/betCart.js'
+import { startPolling, stopPolling } from '@/utils/oddsPoller.js'
 
 const matchList = ref([])
+const matchVersions = ref({})
 const loading = ref(false)
 const showCartSheet = ref(false)
 
@@ -126,15 +128,73 @@ const loadMatches = async () => {
       data: { token: uni.getStorageSync('token') }
     })
     if (res.result && res.result.code === 0) {
-      matchList.value = res.result.data.matches || []
+      const matches = res.result.data.matches || []
+      matchList.value = matches
+      const versions = {}
+      for (const m of matches) {
+        versions[m._id] = m.oddsVersion || 0
+      }
+      matchVersions.value = versions
     }
   } catch (e) { console.error(e) }
   loading.value = false
 }
 
 // 页面显示时加载
-import { onShow } from '@dcloudio/uni-app'
-onShow(() => { loadMatches() })
+import { onShow, onHide } from '@dcloudio/uni-app'
+onShow(() => {
+  loadMatches().then(() => {
+    const ids = Object.keys(matchVersions.value)
+    if (ids.length > 0) {
+      startPolling({
+        matchIds: ids,
+        versions: { ...matchVersions.value },
+        onChange: async (changedIds) => {
+          const token = uni.getStorageSync('token')
+          if (!token) return
+          try {
+            const res = await uniCloud.callFunction({
+              name: 'user-match',
+              data: { token }
+            })
+            if (res.result && res.result.code === 0) {
+              const freshMatches = res.result.data.matches || []
+              const freshMap = {}
+              for (const m of freshMatches) {
+                freshMap[m._id] = m
+                matchVersions.value[m._id] = m.oddsVersion || 0
+              }
+              for (const id of changedIds) {
+                const idx = matchList.value.findIndex(m => m._id === id)
+                if (idx >= 0 && freshMap[id]) {
+                  matchList.value[idx] = freshMap[id]
+                }
+              }
+              for (const id of changedIds) {
+                const freshMatch = freshMap[id]
+                if (!freshMatch) continue
+                for (const cat of freshMatch.categoryPlays || []) {
+                  for (const p of cat.plays) {
+                    betCart.updateOdds(p._id, p.odds)
+                  }
+                }
+              }
+              const cartMatchIds = new Set(betCart.getMatchIds())
+              const relevantChanges = changedIds.filter(id => cartMatchIds.has(id))
+              if (relevantChanges.length > 0) {
+                uni.showToast({ title: '购物车赔率已更新', icon: 'none', duration: 2000 })
+              }
+            }
+          } catch (e) { console.error(e) }
+        }
+      })
+    }
+  })
+})
+
+onHide(() => {
+  stopPolling()
+})
 </script>
 
 <style lang="scss" scoped>
