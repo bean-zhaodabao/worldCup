@@ -173,9 +173,11 @@ const totalOdds = computed(() => {
   return product.toFixed(2)
 })
 
-const lastOdds = ref(parseFloat(totalOdds.value) || 0)
+const lastOdds = ref(0)
 
+// 仅弹层可见期间监听赔率变化（后台改赔率触发的才提示，用户切换玩法不会触发）
 watch(totalOdds, (newVal) => {
+  if (!props.visible) return
   const num = parseFloat(newVal) || 0
   if (lastOdds.value > 0 && num !== lastOdds.value) {
     const isParlay = playList.value.length > 1
@@ -343,6 +345,8 @@ watch(() => props.visible, (val) => {
     multiplier.value = 1
     slideLeft.value = 0
     slideProgress.value = 0
+    // 记录打开时的赔率作为基准，后续只在此基准上检测变化
+    lastOdds.value = parseFloat(totalOdds.value) || 0
   }
 })
 </script>
