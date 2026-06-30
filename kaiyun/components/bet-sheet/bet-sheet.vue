@@ -173,6 +173,21 @@ const totalOdds = computed(() => {
   return product.toFixed(2)
 })
 
+const lastOdds = ref(parseFloat(totalOdds.value) || 0)
+
+watch(totalOdds, (newVal) => {
+  const num = parseFloat(newVal) || 0
+  if (lastOdds.value > 0 && num !== lastOdds.value) {
+    const isParlay = playList.value.length > 1
+    uni.showToast({
+      title: isParlay ? '购物车赔率已更新' : '赔率已更新',
+      icon: 'none',
+      duration: 2000
+    })
+  }
+  lastOdds.value = num
+})
+
 // ============ 可赢额度 ============
 const winAmount = computed(() => {
   const amt = parseFloat(inputAmount.value) || 0
