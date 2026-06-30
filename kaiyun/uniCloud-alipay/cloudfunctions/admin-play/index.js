@@ -148,6 +148,12 @@ exports.main = async (event, context) => {
         createTime: new Date(), updateTime: new Date()
       }
       const res = await db.collection('plays').add(doc)
+
+      // 自增比赛赔率版本号
+      await db.collection('matches').doc(matchId).update({
+        oddsVersion: db.command.inc(1)
+      })
+
       await writeLog(db, {
         adminId: admin._id, adminName: admin.username,
         action: 'update_play', targetType: 'plays', targetId: res.id,
@@ -187,6 +193,16 @@ exports.main = async (event, context) => {
       if (odds < 1.01) return err('赔率不能低于1.01')
 
       await db.collection('plays').where({ _id: db.command.in(ids) }).update({ odds: Number(odds), updateTime: new Date() })
+
+      // 自增所有涉及比赛的赔率版本号
+      const affectedPlays = await db.collection('plays').where({ _id: db.command.in(ids) }).field({ matchId: 1 }).get()
+      const affectedMatchIds = [...new Set((affectedPlays.data || []).map(p => p.matchId).filter(Boolean))]
+      for (const mId of affectedMatchIds) {
+        await db.collection('matches').doc(mId).update({
+          oddsVersion: db.command.inc(1)
+        })
+      }
+
       await writeLog(db, {
         adminId: admin._id, adminName: admin.username,
         action: 'update_odds', targetType: 'plays', targetId: ids.join(','),
@@ -209,6 +225,18 @@ exports.main = async (event, context) => {
         updateData.odds = Number(odds)
       }
       await db.collection('plays').doc(id).update(updateData)
+
+      // 如果修改了赔率，自增比赛赔率版本号
+      if (odds !== undefined) {
+        const playInfo = await db.collection('plays').doc(id).field({ matchId: 1 }).get()
+        const mId = (playInfo.data && playInfo.data[0] && playInfo.data[0].matchId) || ''
+        if (mId) {
+          await db.collection('matches').doc(mId).update({
+            oddsVersion: db.command.inc(1)
+          })
+        }
+      }
+
       if (odds !== undefined) {
         await writeLog(db, {
           adminId: admin._id, adminName: admin.username,
