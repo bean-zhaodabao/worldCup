@@ -1,0 +1,65 @@
+============================================================
+中国足彩网(zgzcw)赔率接口 — 调用说明
+记录时间:2026-08-07
+============================================================
+
+【一、接口信息】
+--------------------------------------------
+URL:      https://plzx.zgzcw.com/odds/oyzs_ajax.action
+方法:     POST
+编码:     application/x-www-form-urlencoded
+
+Form Data 参数:
+  type      = jc              # 玩法类型,jc=竞彩
+  issue     = 2026-08-07      # 日期,可查历史(如 2026-08-06)
+  date      = (留空)
+  companys  = 7,7,3,10,5      # 赔率公司ID列表
+
+【二、调用要点(已实测)】
+--------------------------------------------
+1. 无需登录/token,直接 POST 即返回 JSON(比赛列表)。
+2. 必须带浏览器请求头,否则返回 418(华为WAF拦截):
+     User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36
+     Referer: https://plzx.zgzcw.com/
+     X-Requested-With: XMLHttpRequest
+     Accept: application/json, text/javascript, */*; q=0.01
+3. 带齐请求头后仍可能偶发 418 → 间隔 3~5 秒重试即可成功。
+4. 响应头无 CORS → 浏览器前端不能直接调,必须服务端/云函数调用。
+5. 轮询建议间隔 ≥ 60 秒,避免触发 WAF 限流。
+
+【三、返回数据结构】
+--------------------------------------------
+返回 JSON 数组,每项是一场比赛:
+  CC_ID                竞彩编号(如:周四001)
+  HOST_NAME/GUEST_NAME 主队/客队
+  MATCH_TIME           开赛时间(如:2026-08-07 07:00:00)
+  LEAGUE_NAME_SIMPLY   联赛名
+  MATCH_STATUS         比赛状态(0=未开始)
+  SOURCE_MATCH_ID      zgzcw 比赛ID
+  listOdds[]           各公司赔率:
+
+    listOdds 每项(SOURCE_COMPANY_ID 即 companys 里的公司ID):
+      WIN/LOST/SAME     欧赔 胜/负/平
+      FIRST_WIN/FIRST_LOST/FIRST_SAME   初赔
+      HOST/GUEST        亚盘 主/客 水位
+      HANDICAP          让球盘口(如 -0.25)
+      BIG/SMALL         大小球水位
+
+【四、接入项目方案(概要,未实施)】
+--------------------------------------------
+背景:项目当前赔率由管理端手动录入,无外部数据源。
+思路:
+  1. 新建云函数 sync-odds:
+     - 带浏览器头 POST 调用,418 重试
+     - 按 球队名+开赛时间 匹配内部 matches 表
+     - 欧赔 WIN/LOST/SAME → "胜平负"大类下 胜/平/负 玩法
+     - 更新 plays.odds 并 matches.oddsVersion +1
+  2. 触发:管理端加"同步赔率"按钮 + (可选)定时任务(≥60秒)
+  3. 移动端零改动(已有 oddsVersion 轮询自动刷新)
+
+注意:
+  - 队名可能和库内不一致,正式接入前先跑匹配率测试
+  - 亚盘可扩展;大小球与项目"进球区间"玩法不对应,不映射
+  - 第三方数据无 SLA,接口可能变更/封禁,建议保留人工可覆盖
+
+============================================================
