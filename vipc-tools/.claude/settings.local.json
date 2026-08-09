@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Select-String -Path \"D:\\\\wxd\\\\project\\\\saishi-data\\\\vipc-tools\\\\record-data\\\\05315e55-49cc-4a58-9b4b-b589eee0260c.jsonl\" -Pattern 'matchState' | Select-Object -First 2 | ForEach-Object { $_.Line.Substring\\(0, [Math]::Min\\(600, $_.Line.Length\\)\\) })"
+    ]
+  }
+}
