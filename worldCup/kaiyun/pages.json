@@ -35,6 +35,18 @@
 			"style": {
 				"navigationBarTitleText": "个人中心"
 			}
+		},
+		{
+			"path": "pages/mine/wallet",
+			"style": {
+				"navigationBarTitleText": "资金流水"
+			}
+		},
+		{
+			"path": "pages/mine/withdraw",
+			"style": {
+				"navigationBarTitleText": "提现"
+			}
 		}
 	],
 	"tabBar": {

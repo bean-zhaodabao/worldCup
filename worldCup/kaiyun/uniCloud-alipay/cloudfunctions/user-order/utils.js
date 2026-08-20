@@ -14,10 +14,16 @@ async function verifyToken(db, token) {
     const user = await db.collection('users').doc(userId).get()
     if (!user.data || user.data.length === 0) return null
     const u = user.data[0]
+    if (u.status === 'disabled') return null
     const crypto = require('crypto')
     const expectedSign = crypto.createHash('md5').update(userId + ':' + timestamp + ':' + u.password).digest('hex').substring(0, 16)
     if (sign !== expectedSign) return null
-    return { _id: u._id, username: u.username, role: u.role }
+    return {
+      _id: u._id, username: u.username, role: u.role,
+      type: u.type || 'retail',
+      balance: u.balance || 0,
+      frozenBalance: u.frozenBalance || 0
+    }
   } catch (e) { return null }
 }
 

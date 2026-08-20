@@ -1,0 +1,606 @@
+{
+    "asia": [
+        {
+            "companyId": 8,
+            "companyName": "Bet3**",
+            "oddsTrend": [
+                -1,
+                1
+            ],
+            "odds": [
+                "0.55",
+                "1.38"
+            ],
+            "firstOdds": [
+                "0.68",
+                "1.15"
+            ],
+            "firstPankou": "受半球",
+            "pankou": "受半球/一球",
+            "firstReturnRatio": "94.31%",
+            "returnRatio": "93.87%"
+        },
+        {
+            "companyId": 12,
+            "companyName": "易**",
+            "oddsTrend": [
+                -1,
+                1
+            ],
+            "odds": [
+                "0.75",
+                "1.06"
+            ],
+            "firstOdds": [
+                "0.92",
+                "0.85"
+            ],
+            "firstPankou": "受平手/半球",
+            "pankou": "受半球",
+            "firstReturnRatio": "94.22%",
+            "returnRatio": "94.62%"
+        },
+        {
+            "companyId": 14,
+            "companyName": "伟*",
+            "oddsTrend": [
+                1,
+                1
+            ],
+            "odds": [
+                "0.74",
+                "1.11"
+            ],
+            "firstOdds": [
+                "0.68",
+                "1.04"
+            ],
+            "firstPankou": "受半球",
+            "pankou": "受半球",
+            "firstReturnRatio": "92.13%",
+            "returnRatio": "95.36%"
+        },
+        {
+            "companyId": 17,
+            "companyName": "明*",
+            "oddsTrend": [
+                -1,
+                1
+            ],
+            "odds": [
+                "1.03",
+                "0.85"
+            ],
+            "firstOdds": [
+                "1.05",
+                "0.77"
+            ],
+            "firstPankou": "受平手/半球",
+            "pankou": "受平手/半球",
+            "firstReturnRatio": "94.99%",
+            "returnRatio": "96.79%"
+        },
+        {
+            "companyId": 35,
+            "companyName": "盈*",
+            "oddsTrend": [
+                -1,
+                1
+            ],
+            "odds": [
+                "0.55",
+                "1.44"
+            ],
+            "firstOdds": [
+                "0.88",
+                "0.90"
+            ],
+            "firstPankou": "受平手/半球",
+            "pankou": "受半球/一球",
+            "firstReturnRatio": "94.5%",
+            "returnRatio": "94.79%"
+        },
+        {
+            "companyId": 31,
+            "companyName": "利*",
+            "oddsTrend": [
+                -1,
+                1
+            ],
+            "odds": [
+                "0.80",
+                "1.08"
+            ],
+            "firstOdds": [
+                "0.94",
+                "0.90"
+            ],
+            "firstPankou": "受平手/半球",
+            "pankou": "受半球",
+            "firstReturnRatio": "95.99%",
+            "returnRatio": "96.49%"
+        },
+        {
+            "companyId": 24,
+            "companyName": "12bet/**",
+            "oddsTrend": [
+                -1,
+                1
+            ],
+            "odds": [
+                "0.55",
+                "1.49"
+            ],
+            "firstOdds": [
+                "1.07",
+                "0.75"
+            ],
+            "firstPankou": "受平手/半球",
+            "pankou": "受半球/一球",
+            "firstReturnRatio": "94.83%",
+            "returnRatio": "95.53%"
+        },
+        {
+            "companyId": 3,
+            "companyName": "S*",
+            "oddsTrend": [
+                -1,
+                1
+            ],
+            "odds": [
+                "1.05",
+                "0.84"
+            ],
+            "firstOdds": [
+                "1.44",
+                "0.57"
+            ],
+            "firstPankou": "平手",
+            "pankou": "受平手/半球",
+            "firstReturnRatio": "95.53%",
+            "returnRatio": "96.97%"
+        },
+        {
+            "companyId": 42,
+            "companyName": "18B**",
+            "oddsTrend": [
+                1,
+                -1
+            ],
+            "odds": [
+                "1.43",
+                "0.53"
+            ],
+            "firstOdds": [
+                "0.82",
+                "0.91"
+            ],
+            "firstPankou": "受平手/半球",
+            "pankou": "平手",
+            "firstReturnRatio": "93.2%",
+            "returnRatio": "93.89%"
+        },
+        {
+            "companyId": 47,
+            "companyName": "平*",
+            "oddsTrend": [
+                1,
+                -1
+            ],
+            "odds": [
+                "1.02",
+                "0.84"
+            ],
+            "firstOdds": [
+                "0.81",
+                "0.97"
+            ],
+            "firstPankou": "受平手/半球",
+            "pankou": "受平手/半球",
+            "firstReturnRatio": "94.33%",
+            "returnRatio": "96.29%"
+        },
+        {
+            "companyId": 48,
+            "companyName": "香港**",
+            "oddsTrend": [
+                0,
+                0
+            ],
+            "odds": [
+                "1.01",
+                "0.80"
+            ],
+            "firstOdds": [
+                "1.01",
+                "0.80"
+            ],
+            "firstPankou": "受平手/半球",
+            "pankou": "受平手/半球",
+            "firstReturnRatio": "94.96%",
+            "returnRatio": "94.96%"
+        },
+        {
+            "companyId": 9,
+            "companyName": "威廉**",
+            "oddsTrend": [
+                1,
+                -1
+            ],
+            "odds": [
+                "0.87",
+                "0.74"
+            ],
+            "firstOdds": [
+                "0.65",
+                "1.10"
+            ],
+            "firstPankou": "受半球",
+            "pankou": "受平手/半球",
+            "firstReturnRatio": "92.4%",
+            "returnRatio": "90.13%"
+        },
+        {
+            "companyId": 19,
+            "companyName": "Interwett**",
+            "oddsTrend": [
+                0,
+                0
+            ],
+            "odds": [
+                "0.73",
+                "1.10"
+            ],
+            "firstOdds": [
+                "0.73",
+                "1.10"
+            ],
+            "firstPankou": "受半球",
+            "pankou": "受半球",
+            "firstReturnRatio": "94.86%",
+            "returnRatio": "94.86%"
+        },
+        {
+            "companyId": 50,
+            "companyName": "1xb**",
+            "oddsTrend": [
+                1,
+                -1
+            ],
+            "odds": [
+                "1.53",
+                "0.57"
+            ],
+            "firstOdds": [
+                "1.18",
+                "0.75"
+            ],
+            "firstPankou": "平手",
+            "pankou": "平手",
+            "firstReturnRatio": "97.07%",
+            "returnRatio": "96.88%"
+        }
+    ],
+    "dxq": [
+        {
+            "companyId": 4,
+            "companyName": "立*",
+            "oddsTrend": [
+                -1,
+                1
+            ],
+            "odds": [
+                "0.28",
+                "2.40"
+            ],
+            "firstOdds": [
+                "1.05",
+                "0.73"
+            ],
+            "firstPankou": "二球半",
+            "pankou": "一球半",
+            "firstReturnRatio": "93.82%",
+            "returnRatio": "92.99%"
+        },
+        {
+            "companyId": 8,
+            "companyName": "Bet3**",
+            "oddsTrend": [
+                1,
+                -1
+            ],
+            "odds": [
+                "1.00",
+                "0.80"
+            ],
+            "firstOdds": [
+                "0.95",
+                "0.85"
+            ],
+            "firstPankou": "二球半",
+            "pankou": "二球半",
+            "firstReturnRatio": "94.93%",
+            "returnRatio": "94.74%"
+        },
+        {
+            "companyId": 12,
+            "companyName": "易**",
+            "oddsTrend": [
+                1,
+                -1
+            ],
+            "odds": [
+                "1.06",
+                "0.75"
+            ],
+            "firstOdds": [
+                "0.94",
+                "0.83"
+            ],
+            "firstPankou": "二球半",
+            "pankou": "二球半",
+            "firstReturnRatio": "94.17%",
+            "returnRatio": "94.62%"
+        },
+        {
+            "companyId": 14,
+            "companyName": "伟*",
+            "oddsTrend": [
+                1,
+                -1
+            ],
+            "odds": [
+                "1.05",
+                "0.81"
+            ],
+            "firstOdds": [
+                "0.92",
+                "0.82"
+            ],
+            "firstPankou": "二球半",
+            "pankou": "二球半",
+            "firstReturnRatio": "93.43%",
+            "returnRatio": "96.13%"
+        },
+        {
+            "companyId": 17,
+            "companyName": "明*",
+            "oddsTrend": [
+                -1,
+                1
+            ],
+            "odds": [
+                "0.82",
+                "1.04"
+            ],
+            "firstOdds": [
+                "0.96",
+                "0.84"
+            ],
+            "firstPankou": "二球半",
+            "pankou": "二球/二球半",
+            "firstReturnRatio": "94.91%",
+            "returnRatio": "96.19%"
+        },
+        {
+            "companyId": 35,
+            "companyName": "盈*",
+            "oddsTrend": [
+                1,
+                -1
+            ],
+            "odds": [
+                "0.81",
+                "1.03"
+            ],
+            "firstOdds": [
+                "0.70",
+                "1.06"
+            ],
+            "firstPankou": "二球/二球半",
+            "pankou": "二球/二球半",
+            "firstReturnRatio": "93.14%",
+            "returnRatio": "95.68%"
+        },
+        {
+            "companyId": 31,
+            "companyName": "利*",
+            "oddsTrend": [
+                1,
+                -1
+            ],
+            "odds": [
+                "1.08",
+                "0.78"
+            ],
+            "firstOdds": [
+                "0.97",
+                "0.85"
+            ],
+            "firstPankou": "二球半",
+            "pankou": "二球半",
+            "firstReturnRatio": "95.41%",
+            "returnRatio": "95.92%"
+        },
+        {
+            "companyId": 24,
+            "companyName": "12bet/**",
+            "oddsTrend": [
+                1,
+                -1
+            ],
+            "odds": [
+                "1.38",
+                "0.58"
+            ],
+            "firstOdds": [
+                "0.96",
+                "0.84"
+            ],
+            "firstPankou": "二球半",
+            "pankou": "二球半/三球",
+            "firstReturnRatio": "94.91%",
+            "returnRatio": "94.96%"
+        },
+        {
+            "companyId": 3,
+            "companyName": "S*",
+            "oddsTrend": [
+                1,
+                -1
+            ],
+            "odds": [
+                "1.02",
+                "0.85"
+            ],
+            "firstOdds": [
+                "0.74",
+                "1.14"
+            ],
+            "firstPankou": "二球/二球半",
+            "pankou": "二球半",
+            "firstReturnRatio": "95.97%",
+            "returnRatio": "96.56%"
+        },
+        {
+            "companyId": 42,
+            "companyName": "18B**",
+            "oddsTrend": [
+                -1,
+                1
+            ],
+            "odds": [
+                "0.76",
+                "1.00"
+            ],
+            "firstOdds": [
+                "0.97",
+                "0.76"
+            ],
+            "firstPankou": "二球半",
+            "pankou": "二球/二球半",
+            "firstReturnRatio": "92.95%",
+            "returnRatio": "93.62%"
+        },
+        {
+            "companyId": 22,
+            "companyName": "10B**",
+            "oddsTrend": [
+                1,
+                -1
+            ],
+            "odds": [
+                "1.01",
+                "0.78"
+            ],
+            "firstOdds": [
+                "0.93",
+                "0.81"
+            ],
+            "firstPankou": "二球半",
+            "pankou": "二球半",
+            "firstReturnRatio": "93.4%",
+            "returnRatio": "94.4%"
+        },
+        {
+            "companyId": 47,
+            "companyName": "平*",
+            "oddsTrend": [
+                1,
+                -1
+            ],
+            "odds": [
+                "1.08",
+                "0.75"
+            ],
+            "firstOdds": [
+                "0.85",
+                "0.91"
+            ],
+            "firstPankou": "二球/二球半",
+            "pankou": "二球半",
+            "firstReturnRatio": "93.98%",
+            "returnRatio": "95.04%"
+        },
+        {
+            "companyId": 9,
+            "companyName": "威廉**",
+            "oddsTrend": [
+                1,
+                0
+            ],
+            "odds": [
+                "0.95",
+                "0.75"
+            ],
+            "firstOdds": [
+                "0.91",
+                "0.75"
+            ],
+            "firstPankou": "二球半",
+            "pankou": "二球半",
+            "firstReturnRatio": "91.33%",
+            "returnRatio": "92.23%"
+        },
+        {
+            "companyId": 19,
+            "companyName": "Interwett**",
+            "oddsTrend": [
+                1,
+                0
+            ],
+            "odds": [
+                "0.97",
+                "0.80"
+            ],
+            "firstOdds": [
+                "0.95",
+                "0.80"
+            ],
+            "firstPankou": "二球半",
+            "pankou": "二球半",
+            "firstReturnRatio": "93.6%",
+            "returnRatio": "94.06%"
+        },
+        {
+            "companyId": 50,
+            "companyName": "1xb**",
+            "oddsTrend": [
+                0,
+                0
+            ],
+            "odds": [
+                "1.09",
+                "0.81"
+            ],
+            "firstOdds": [
+                "1.09",
+                "0.81"
+            ],
+            "firstPankou": "二球半",
+            "pankou": "二球半",
+            "firstReturnRatio": "97%",
+            "returnRatio": "97%"
+        },
+        {
+            "companyId": 49,
+            "companyName": "Bw**",
+            "oddsTrend": [
+                -1,
+                1
+            ],
+            "odds": [
+                "0.98",
+                "0.73"
+            ],
+            "firstOdds": [
+                "1.00",
+                "0.71"
+            ],
+            "firstPankou": "二球半",
+            "pankou": "二球半",
+            "firstReturnRatio": "92.18%",
+            "returnRatio": "92.33%"
+        }
+    ]
+}

@@ -22,6 +22,9 @@ exports.main = async (event, context) => {
   return success({
     token,
     userId: user._id,
-    username: user.username
+    username: user.username,
+    type: user.type || 'retail',
+    balance: user.balance || 0,
+    frozenBalance: user.frozenBalance || 0
   }, '登录成功')
 }

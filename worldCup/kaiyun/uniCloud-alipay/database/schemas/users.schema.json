@@ -10,14 +10,32 @@
     },
     "password": {
       "bsonType": "string",
-      "title": "密码",
-      "description": "加密存储的密码"
+      "title": "密码"
     },
     "role": {
       "bsonType": "string",
       "title": "角色",
       "enum": ["user", "admin"],
       "default": "user"
+    },
+    "type": {
+      "bsonType": "string",
+      "title": "账户类型(role=user时生效)",
+      "enum": ["retail", "collector"],
+      "description": "retail=散户(有钱包，下注校验余额)；collector=收单账户(下注不校验余额，钱包可为负数)",
+      "default": "retail"
+    },
+    "balance": {
+      "bsonType": "double",
+      "title": "可用余额",
+      "description": "散户下注扣款、中奖入账；收单账户可负数",
+      "default": 0
+    },
+    "frozenBalance": {
+      "bsonType": "double",
+      "title": "冻结余额",
+      "description": "提现申请中冻结的金额",
+      "default": 0
     },
     "status": {
       "bsonType": "string",

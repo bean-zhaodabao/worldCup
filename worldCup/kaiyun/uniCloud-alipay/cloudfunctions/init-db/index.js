@@ -45,43 +45,74 @@ exports.main = async (event, context) => {
     }
   }
 
-  // 3. 初始化玩法分类（示例数据）
-  const catExist = await db.collection('play-categories').count()
-  if (catExist.total === 0) {
-    // 大类
-    const bigCats = [
-      { name: '胜平负', sort: 1 },
-      { name: '进球', sort: 2 },
-      { name: '比分', sort: 3 },
-      { name: '半全场', sort: 4 }
-    ]
-    const bigIds = {}
-    for (const cat of bigCats) {
+  // 3. 初始化玩法分类（标准7组玩法：5大类 + 7小类）
+  // 结构: 胜平负(胜平负/让球胜平负)、进球(总进球数区间/大小球)、比分(正确比分)、半全场(半全场胜平负)、盘口(让球盘)
+  const bigCatDefs = [
+    { name: '胜平负', sort: 1 },
+    { name: '进球', sort: 2 },
+    { name: '比分', sort: 3 },
+    { name: '半全场', sort: 4 },
+    { name: '盘口', sort: 5 }
+  ]
+  const smallCatDefs = [
+    { name: '胜平负', parent: '胜平负', sort: 1 },
+    { name: '让球胜平负', parent: '胜平负', sort: 2 },
+    { name: '总进球数区间', parent: '进球', sort: 1 },
+    { name: '大小球', parent: '进球', sort: 2 },
+    { name: '正确比分', parent: '比分', sort: 1 },
+    { name: '半全场胜平负', parent: '半全场', sort: 1 },
+    { name: '让球盘', parent: '盘口', sort: 1 }
+  ]
+
+  // 大类：按名查找，不存在则创建
+  const bigIds = {}
+  for (const cat of bigCatDefs) {
+    const exist = await db.collection('play-categories').where({ name: cat.name, parentId: null }).get()
+    if (exist.data && exist.data.length > 0) {
+      const doc = exist.data[0]
+      bigIds[cat.name] = doc._id
+      // 修正排序/恢复误删
+      if (doc.sort !== cat.sort || doc.deleted) {
+        await db.collection('play-categories').doc(doc._id).update({ sort: cat.sort, deleted: false })
+      }
+    } else {
       const res = await db.collection('play-categories').add({
-        name: cat.name, parentId: null, sort: cat.sort, createTime: new Date()
+        name: cat.name, parentId: null, sort: cat.sort, deleted: false, createTime: new Date()
       })
       bigIds[cat.name] = res.id
+      results.push('大类已创建: ' + cat.name)
     }
-
-    // 小类
-    const smallCats = [
-      { name: '胜平负', parent: '胜平负', sort: 1 },
-      { name: '让球胜平负', parent: '胜平负', sort: 2 },
-      { name: '总进球数区间', parent: '进球', sort: 1 },
-      { name: '准确进球数', parent: '进球', sort: 2 },
-      { name: '上半场准确进球数', parent: '进球', sort: 3 },
-      { name: '正确比分', parent: '比分', sort: 1 },
-      { name: '半全场胜平负', parent: '半全场', sort: 1 }
-    ]
-    for (const cat of smallCats) {
-      await db.collection('play-categories').add({
-        name: cat.name, parentId: bigIds[cat.parent], sort: cat.sort, createTime: new Date()
-      })
-    }
-    results.push('玩法分类已创建（4大类 + 7小类）')
-  } else {
-    results.push('玩法分类已存在，跳过')
   }
+
+  // 小类：按(名称+父类)查找，不存在则创建
+  const validSmallNames = smallCatDefs.map(c => c.name)
+  for (const cat of smallCatDefs) {
+    const exist = await db.collection('play-categories').where({ name: cat.name, parentId: bigIds[cat.parent] }).get()
+    if (exist.data && exist.data.length > 0) {
+      const doc = exist.data[0]
+      if (doc.sort !== cat.sort || doc.deleted) {
+        await db.collection('play-categories').doc(doc._id).update({ sort: cat.sort, deleted: false })
+      }
+    } else {
+      await db.collection('play-categories').add({
+        name: cat.name, parentId: bigIds[cat.parent], sort: cat.sort, deleted: false, createTime: new Date()
+      })
+      results.push('小类已创建: ' + cat.parent + ' / ' + cat.name)
+    }
+  }
+
+  // 旧版小类（准确进球数、上半场准确进球数）标记删除，避免在分类选择中干扰
+  const legacyCats = await db.collection('play-categories')
+    .where({ parentId: db.command.neq(null) })
+    .get()
+  for (const c of (legacyCats.data || [])) {
+    if (!validSmallNames.includes(c.name)) {
+      await db.collection('play-categories').doc(c._id).update({ deleted: true })
+      results.push('旧小类已停用: ' + c.name)
+    }
+  }
+
+  results.push('玩法分类初始化完成（5大类 + 7小类）')
 
   return {
     code: 0,

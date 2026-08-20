@@ -193,7 +193,8 @@ exports.main = async (event, context) => {
       if (!ids || !Array.isArray(ids) || odds === undefined) return err('参数错误')
       if (odds < 1.01) return err('赔率不能低于1.01')
 
-      await db.collection('plays').where({ _id: db.command.in(ids) }).update({ odds: Number(odds), updateTime: new Date() })
+      // 人工改赔率: 标记 manualOdds, 同步不再覆盖展示赔率
+      await db.collection('plays').where({ _id: db.command.in(ids) }).update({ odds: Number(odds), manualOdds: true, updateTime: new Date() })
 
       // 自增所有涉及比赛的赔率版本号
       const affectedPlays = await db.collection('plays').where({ _id: db.command.in(ids) }).field({ matchId: 1 }).get()
@@ -225,6 +226,7 @@ exports.main = async (event, context) => {
       if (odds !== undefined) {
         if (odds < 1.01) return err('赔率不能低于1.01')
         updateData.odds = Number(odds)
+        updateData.manualOdds = true // 人工改赔率后同步不再覆盖
       }
       await db.collection('plays').doc(id).update(updateData)
 
@@ -249,6 +251,50 @@ exports.main = async (event, context) => {
         })
       }
       return ok(null, '玩法更新成功')
+    }
+
+    // ============ PATCH /plays/:id/follow - 恢复跟随接口赔率 ============
+    if (method === 'PATCH' && path.includes('/follow')) {
+      const id = path.split('/')[path.split('/').length - 2]
+      const play = await db.collection('plays').doc(id).get()
+      if (!play.data || play.data.length === 0) return err('玩法不存在')
+      const playData = play.data[0]
+
+      const updateData = { manualOdds: false, manualStop: false, updateTime: new Date() }
+      // 立即恢复为接口原始赔率
+      if (playData.oddsSource !== undefined && playData.oddsSource !== null) {
+        updateData.odds = playData.oddsSource
+      }
+      await db.collection('plays').doc(id).update(updateData)
+
+      await db.collection('matches').doc(playData.matchId).update({ oddsVersion: db.command.inc(1) })
+      await writeLog(db, {
+        adminId: admin._id, adminName: admin.username,
+        action: 'update_odds', targetType: 'plays', targetId: id,
+        detail: '恢复跟随接口赔率: ' + playData.name + ' -> ' + (updateData.odds !== undefined ? updateData.odds : '自动'),
+        beforeData: { odds: playData.odds },
+        afterData: { odds: updateData.odds !== undefined ? updateData.odds : null }
+      })
+      return ok(null, '已恢复跟随接口赔率')
+    }
+
+    // ============ PATCH /plays/:id/stop - 人工停售/恢复 ============
+    if (method === 'PATCH' && path.includes('/stop')) {
+      const id = path.split('/')[path.split('/').length - 2]
+      const { stop } = body
+      if (typeof stop !== 'boolean') return err('stop 参数必填(布尔)')
+
+      await db.collection('plays').doc(id).update({ stop, manualStop: true, updateTime: new Date() })
+      const play = await db.collection('plays').doc(id).get()
+      if (play.data && play.data.length > 0) {
+        await db.collection('matches').doc(play.data[0].matchId).update({ oddsVersion: db.command.inc(1) })
+      }
+      await writeLog(db, {
+        adminId: admin._id, adminName: admin.username,
+        action: 'update_play', targetType: 'plays', targetId: id,
+        detail: (stop ? '停售' : '恢复销售') + '玩法: ' + id
+      })
+      return ok(null, stop ? '已停售' : '已恢复销售')
     }
 
     // ============ DELETE - 删除/下架玩法 ============

@@ -1,0 +1,31 @@
+{
+  "bsonType": "object",
+  "required": ["userId", "type", "amount", "balanceAfter"],
+  "properties": {
+    "_id": { "bsonType": "string" },
+    "userId": {
+      "bsonType": "string",
+      "title": "用户ID",
+      "foreignKey": "users._id"
+    },
+    "type": {
+      "bsonType": "string",
+      "title": "流水类型",
+      "enum": ["recharge", "withdraw", "bet", "win", "refund", "freeze", "unfreeze", "adjust"]
+    },
+    "amount": {
+      "bsonType": "double",
+      "title": "变动金额",
+      "description": "正数入账，负数出账"
+    },
+    "balanceAfter": { "bsonType": "double", "title": "变动后可用余额" },
+    "frozenAfter": { "bsonType": "double", "title": "变动后冻结余额" },
+    "orderId": { "bsonType": "string", "title": "关联订单ID" },
+    "orderNo": { "bsonType": "string", "title": "关联订单号" },
+    "withdrawId": { "bsonType": "string", "title": "关联提现单ID" },
+    "remark": { "bsonType": "string", "title": "备注" },
+    "operatorId": { "bsonType": "string", "title": "操作人ID" },
+    "operatorName": { "bsonType": "string", "title": "操作人名称" },
+    "createTime": { "bsonType": "date", "title": "流水时间" }
+  }
+}

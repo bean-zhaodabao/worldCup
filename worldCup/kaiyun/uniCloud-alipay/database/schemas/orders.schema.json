@@ -37,9 +37,15 @@
     "status": {
       "bsonType": "string",
       "title": "订单状态",
-      "enum": ["pending", "won", "lost", "settled"],
-      "description": "待开奖->已中奖/未中奖->已结算",
+      "enum": ["pending", "won", "lost", "settled", "refunded"],
+      "description": "待开奖->已中奖/未中奖->已结算；refunded=赛事取消退款",
       "default": "pending"
+    },
+    "result": {
+      "bsonType": "string",
+      "title": "结算结果",
+      "enum": ["won", "lost", "partial"],
+      "description": "won=返还≥本金；partial=0<返还<本金(半赢半输)；lost=返还0"
     },
     "isParlay": {
       "bsonType": "bool",

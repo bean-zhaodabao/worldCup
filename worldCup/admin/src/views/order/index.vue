@@ -5,7 +5,7 @@
       <el-form :inline="true" :model="qf">
         <el-form-item label="赛事"><el-select v-model="qf.matchId" placeholder="全部" clearable filterable style="width:180px"><el-option v-for="m in matchOpts" :key="m._id" :label="m.name" :value="m._id" /></el-select></el-form-item>
         <el-form-item label="用户名"><el-input v-model="qf.username" placeholder="搜索" clearable /></el-form-item>
-        <el-form-item label="状态"><el-select v-model="qf.status" placeholder="全部" clearable style="width:100px"><el-option label="待开奖" value="pending"/><el-option label="已中奖" value="won"/><el-option label="未中奖" value="lost"/><el-option label="已结算" value="settled"/></el-select></el-form-item>
+        <el-form-item label="状态"><el-select v-model="qf.status" placeholder="全部" clearable style="width:100px"><el-option label="待开奖" value="pending"/><el-option label="已中奖" value="won"/><el-option label="未中奖" value="lost"/><el-option label="已结算" value="settled"/><el-option label="已退款" value="refunded"/></el-select></el-form-item>
         <el-form-item><el-button type="primary" icon="Search" @click="loadList">搜索</el-button></el-form-item>
       </el-form>
     </el-card>
@@ -29,7 +29,7 @@
         <el-table-column prop="betAmount" label="下注额" width="100" />
         <el-table-column label="总赔率" width="80"><template #default="{row}">{{ row.totalOdds?.toFixed(2) }}</template></el-table-column>
         <el-table-column prop="winAmount" label="中奖金额" width="100" />
-        <el-table-column label="状态" width="90"><template #default="{row}"><el-tag :type="{pending:'warning',won:'success',lost:'info',settled:'info'}[row.status]">{{ {pending:'待开奖',won:'已中奖',lost:'未中奖',settled:'已结算'}[row.status] }}</el-tag></template></el-table-column>
+        <el-table-column label="状态" width="90"><template #default="{row}"><el-tag :type="{pending:'warning',won:'success',lost:'info',settled:'info',refunded:'danger'}[row.status]">{{ {pending:'待开奖',won:'已中奖',lost:'未中奖',settled:'已结算',refunded:'已退款'}[row.status] }}</el-tag></template></el-table-column>
         <el-table-column label="下单时间" width="160"><template #default="{row}">{{ fmt(row.createTime) }}</template></el-table-column>
         <el-table-column label="操作" width="80">
           <template #default="{row}"><el-popconfirm title="确定删除该订单？" @confirm="doDelete(row)"><template #reference><el-button size="small" type="danger">删除</el-button></template></el-popconfirm></template>

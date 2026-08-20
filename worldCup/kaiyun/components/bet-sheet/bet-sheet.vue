@@ -10,7 +10,7 @@
         <template v-if="!isParlay && playList.length === 1">
           <view class="header-row">
             <text class="play-name">{{ firstPlayName }}</text>
-            <text class="odds-tag">赔率 {{ totalOdds }}</text>
+            <text class="odds-tag">赔率 {{ singleOddsText }}</text>
           </view>
           <view class="header-row sub">
             <text class="category-text">{{ categoryText }}</text>
@@ -33,12 +33,17 @@
                 <text class="play-tag-remove" @click="removePlay(i)">×</text>
               </view>
               <view class="parlay-play-row">
-                <text class="parlay-play-name">{{ p.playName }}</text>
-                <text class="parlay-play-odds">@{{ p.odds }}</text>
+                <text class="parlay-play-name">{{ playDisplayName(p) }}</text>
+                <text class="parlay-play-odds">@{{ playOddsText(p) }}</text>
               </view>
             </view>
           </view>
         </template>
+
+        <!-- 实时赔率提示 -->
+        <view class="header-row sub">
+          <text class="realtime-hint">提交时按系统实时赔率下单</text>
+        </view>
       </view>
 
       <!-- 金额输入区 -->
@@ -173,6 +178,51 @@ const totalOdds = computed(() => {
   return product.toFixed(2)
 })
 
+/** 单关赔率文案: 盘口玩法显示水位, 其余显示十进制赔率 */
+const singleOddsText = computed(() => {
+  if (playList.value.length === 0) return '0.00'
+  return playOddsText(playList.value[0])
+})
+
+/** 玩法显示名: 盘口玩法带盘口(如 主 -1.25) */
+function playDisplayName(p) {
+  let name = p.playName || p.name || ''
+  if (p.handicap !== undefined && p.handicap !== null) {
+    const sideText = { home: '主', away: '客', over: '大', under: '小' }[p.side] || ''
+    if (sideText === name) name = sideText + ' ' + handicapText(p.handicap, p.sourceKey)
+    else name = name + ' ' + handicapText(p.handicap, p.sourceKey)
+  }
+  return name
+}
+
+/** 赔率显示: 有水位显示水位, 否则十进制 */
+function playOddsText(p) {
+  if (p.water) return p.water
+  const odds = p.odds || 0
+  return String(odds)
+}
+
+/** 盘口数值 -> 中文文案 */
+function handicapText(n, sourceKey) {
+  const isDxq = (sourceKey || '').indexOf('dxq:') === 0
+  const v = Math.abs(n)
+  const map = [
+    [0, '平手'], [0.25, '平手/半球'], [0.5, '半球'], [0.75, '半球/一球'],
+    [1, '一球'], [1.25, '一球/一球半'], [1.5, '一球半'], [1.75, '一球半/二球'],
+    [2, '二球'], [2.25, '二球/二球半'], [2.5, '二球半'], [2.75, '二球半/三球'],
+    [3, '三球'], [3.25, '三球/三球半'], [3.5, '三球半'], [3.75, '三球半/四球'],
+    [4, '四球'], [4.25, '四球/四球半'], [4.5, '四球半'], [4.75, '四球半/五球'], [5, '五球']
+  ]
+  let text = ''
+  for (const [k, t] of map) {
+    if (Math.abs(v - k) < 0.001) { text = t; break }
+  }
+  if (!text) text = String(v)
+  if (isDxq) return text // 大小球: 直接显示盘口
+  if (n === 0) return '平手'
+  return n < 0 ? ('让' + text) : ('受让' + text)
+}
+
 const lastOdds = ref(0)
 
 // 仅弹层可见期间监听赔率变化（后台改赔率触发的才提示，用户切换玩法不会触发）
@@ -207,6 +257,7 @@ const canSubmit = computed(() => {
   const amt = parseFloat(inputAmount.value)
   if (isNaN(amt) || amt <= 0) return false
   if (props.isParlay && playList.value.length < 2) return false
+  if (props.isParlay && playList.value.length > 8) return false
   return true
 })
 
@@ -391,6 +442,10 @@ watch(() => props.visible, (val) => {
   }
   .category-text { font-size: 24rpx; color: #999; }
   .teams { font-size: 26rpx; color: #666; margin-top: 8rpx; }
+  .realtime-hint {
+    font-size: 22rpx; color: #ef6c00; background: #fff3e0;
+    padding: 4rpx 14rpx; border-radius: 12rpx;
+  }
 }
 
 // 串关场次列表

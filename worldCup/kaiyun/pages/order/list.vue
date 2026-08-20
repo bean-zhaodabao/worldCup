@@ -36,8 +36,9 @@
         </view>
         <view class="order-foot">
           <text>下注: ¥{{ order.betAmount }}</text>
-          <text class="winnable">可赢: ¥{{ (order.betAmount * order.totalOdds - order.betAmount).toFixed(2) }}</text>
-          <text v-if="order.status === 'won' || order.status === 'settled'">中奖: ¥{{ order.winAmount }}</text>
+          <text class="winnable" v-if="order.status === 'pending'">可赢: ¥{{ (order.betAmount * order.totalOdds - order.betAmount).toFixed(2) }}</text>
+          <text v-if="order.status === 'settled'">返还: ¥{{ order.winAmount }}</text>
+          <text v-if="order.status === 'refunded'">退款: ¥{{ order.betAmount }}</text>
         </view>
         <view class="order-time">
           <text>{{ formatTime(order.createTime) }}</text>
@@ -57,7 +58,7 @@ import { onShow } from '@dcloudio/uni-app'
 
 const orders = ref([])
 const loading = ref(false)
-const statusMap = { pending: '待开奖', won: '已中奖', lost: '未中奖', settled: '已结算' }
+const statusMap = { pending: '待开奖', won: '已中奖', lost: '未中奖', settled: '已结算', refunded: '已退款' }
 
 const formatTime = (t) => {
   if (!t) return ''

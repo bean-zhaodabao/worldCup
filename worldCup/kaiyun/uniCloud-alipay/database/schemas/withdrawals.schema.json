@@ -1,0 +1,29 @@
+{
+  "bsonType": "object",
+  "required": ["userId", "amount", "status"],
+  "properties": {
+    "_id": { "bsonType": "string" },
+    "userId": {
+      "bsonType": "string",
+      "title": "申请用户ID",
+      "foreignKey": "users._id"
+    },
+    "userName": { "bsonType": "string", "title": "申请用户名" },
+    "amount": {
+      "bsonType": "double",
+      "title": "提现金额",
+      "minimum": 0
+    },
+    "status": {
+      "bsonType": "string",
+      "title": "审核状态",
+      "enum": ["pending", "approved", "rejected"],
+      "default": "pending"
+    },
+    "applyTime": { "bsonType": "date", "title": "申请时间" },
+    "reviewTime": { "bsonType": "date", "title": "审核时间" },
+    "operatorId": { "bsonType": "string", "title": "审核人ID" },
+    "operatorName": { "bsonType": "string", "title": "审核人名称" },
+    "remark": { "bsonType": "string", "title": "审核备注" }
+  }
+}

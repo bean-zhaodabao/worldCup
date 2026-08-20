@@ -21,6 +21,15 @@ export function deleteMatch(id) {
 export function updateMatchStatus(id, status) {
   return request.patch('/admin-match/' + id, { status })
 }
+export function syncMatches() {
+  return request.post('/admin-match/sync')
+}
+export function updateMatchOnline(id, online) {
+  return request.patch('/admin-match/' + id + '/online', { online })
+}
+export function batchOnlineMatches(ids, online) {
+  return request.post('/admin-match/online-batch', { ids, online })
+}
 
 // ========== 玩法分类 (admin-category) ==========
 export function getCategoryTree() {
@@ -58,6 +67,12 @@ export function batchUpdateOdds(ids, odds) {
 export function copyPlays(fromMatchId, toMatchId) {
   return request.post('/admin-play/copy', { fromMatchId, toMatchId })
 }
+export function followPlay(id) {
+  return request.patch('/admin-play/' + id + '/follow')
+}
+export function stopPlay(id, stop) {
+  return request.patch('/admin-play/' + id + '/stop', { stop })
+}
 
 // ========== 订单管理 (admin-order) ==========
 export function getOrderList(params) {
@@ -88,6 +103,20 @@ export function resetUserPassword(id, password) {
 }
 export function deleteUser(id) {
   return request.delete('/admin-user/' + id)
+}
+export function rechargeUser(id, amount, remark) {
+  return request.post('/admin-user/' + id + '/recharge', { amount, remark })
+}
+export function updateUserStatus(id, status) {
+  return request.patch('/admin-user/' + id + '/status', { status })
+}
+
+// ========== 提现审核 (admin-withdraw) ==========
+export function getWithdrawList(params) {
+  return request.get('/admin-withdraw', { params })
+}
+export function reviewWithdraw(id, approve, remark) {
+  return request.patch('/admin-withdraw/' + id + '/review', { approve, remark })
 }
 
 // ========== 结算 (admin-settle) ==========

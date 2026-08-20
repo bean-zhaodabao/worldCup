@@ -55,6 +55,12 @@ const routes = [
         meta: { title: '用户管理', icon: 'User' }
       },
       {
+        path: 'withdraw',
+        name: 'Withdraw',
+        component: () => import('@/views/withdraw/index.vue'),
+        meta: { title: '提现审核', icon: 'Money' }
+      },
+      {
         path: 'report',
         name: 'Report',
         component: () => import('@/views/report/index.vue'),

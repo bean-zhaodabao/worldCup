@@ -2,120 +2,158 @@
   <div class="match-plays">
     <div class="page-header">
       <h2>赛事玩法 - {{ matchName }}</h2>
-      <div><el-button @click="openCopyDialog">从其他赛事复制玩法</el-button><el-button type="primary" @click="openPlayDialog(null)">新增玩法</el-button></div>
+      <el-button icon="Refresh" @click="loadList">刷新</el-button>
     </div>
+
+    <el-alert
+      v-if="matchInfo?.sourceMatchId"
+      type="info"
+      :closable="false"
+      style="margin-bottom:16px"
+      title="玩法由接口自动同步（每分钟），可人工覆盖赔率/停售；覆盖后点击「恢复跟随」回到接口赔率"
+    />
+
     <el-card>
-      <el-table :data="list" border stripe v-loading="loading">
-        <el-table-column label="分类（大类/小类）" width="200"><template #default="{row}">{{ row.categoryPath || row.categoryName }}</template></el-table-column>
-        <el-table-column prop="name" label="玩法名称" min-width="150" />
-        <el-table-column prop="label" label="标识" width="100" />
-        <el-table-column label="排序" width="100">
-          <template #default="{row}"><el-input-number v-model="row.sort" :min="0" size="small" controls-position="right" style="width:90px" @change="(v)=>updateSort(row,v)" /></template>
+      <el-table :data="list" border stripe v-loading="loading" row-key="_id">
+        <el-table-column label="分类" width="160">
+          <template #default="{row}">{{ row.categoryPath || row.categoryName }}</template>
         </el-table-column>
-        <el-table-column label="赔率" width="160">
-          <template #default="{row}"><el-input-number v-model="row.odds" :min="1.01" :precision="2" :step="0.01" size="small" controls-position="right" style="width:130px" @change="(v)=>updateOdds(row,v)" /></template>
-        </el-table-column>
-        <el-table-column label="中奖" width="120">
-          <template #default="{row}"><el-switch v-model="row.isWin" @change="(v)=>setWin(row,v)" /></template>
-        </el-table-column>
-        <el-table-column label="状态" width="80">
-          <template #default="{row}"><el-tag v-if="row.deleted" type="danger">已下架</el-tag></template>
-        </el-table-column>
-        <el-table-column label="操作" width="180">
+        <el-table-column prop="name" label="玩法名称" width="110" />
+        <el-table-column label="盘口/水位" width="180">
           <template #default="{row}">
-            <el-button size="small" @click="openPlayDialog(row)">编辑</el-button>
-            <el-popconfirm :title="row.deleted ? '确定物理删除？此操作不可恢复' : '确定删除？已有订单将下架处理'" @confirm="doDelete(row)"><template #reference><el-button size="small" type="danger">{{ row.deleted ? '删除' : '下架' }}</el-button></template></el-popconfirm>
+            <span v-if="row.handicap !== undefined && row.handicap !== null">{{ pankouText(row) }}　{{ row.water }}</span>
+            <span v-else>-</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="原始赔率(接口)" width="120">
+          <template #default="{row}">
+            <span v-if="row.oddsSource !== undefined && row.oddsSource !== null">{{ row.oddsSource }}</span>
+            <span v-else>-</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="展示赔率" width="170">
+          <template #default="{row}">
+            <el-input-number
+              v-model="row.odds"
+              :min="1.01"
+              :precision="2"
+              :step="0.01"
+              size="small"
+              controls-position="right"
+              style="width:130px"
+              @change="(v)=>updateOdds(row,v)"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column label="停售" width="80">
+          <template #default="{row}">
+            <el-switch v-model="row.stop" @change="(v)=>toggleStop(row,v)" />
+          </template>
+        </el-table-column>
+        <el-table-column label="结算结果" width="100">
+          <template #default="{row}">
+            <el-tag v-if="row.result" :type="resultType(row.result)" size="small">{{ resultText(row.result) }}</el-tag>
+            <span v-else>-</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="人工覆盖" width="90">
+          <template #default="{row}">
+            <el-tag v-if="row.manualOdds || row.manualStop" type="warning" size="small">已覆盖</el-tag>
+            <span v-else>-</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="110">
+          <template #default="{row}">
+            <el-button v-if="row.manualOdds || row.manualStop" size="small" @click="doFollow(row)">恢复跟随</el-button>
+            <span v-else>-</span>
           </template>
         </el-table-column>
       </el-table>
     </el-card>
-
-    <el-dialog :title="playDialogTitle" v-model="playVisible" width="480px">
-      <el-form :model="playForm" label-width="100px">
-        <el-form-item label="玩法分类" required>
-          <el-cascader v-model="playForm.categoryId" :options="catOptions" :props="{value:'_id',label:'name',emitPath:false}" placeholder="选择小类" style="width:100%" />
-        </el-form-item>
-        <el-form-item label="玩法名称"><el-input v-model="playForm.name" /></el-form-item>
-        <el-form-item label="标识"><el-input v-model="playForm.label" placeholder="可选" /></el-form-item>
-        <el-form-item label="赔率"><el-input-number v-model="playForm.odds" :min="1.01" :precision="2" :step="0.01" style="width:100%" /></el-form-item>
-        <el-form-item label="排序"><el-input-number v-model="playForm.sort" :min="0" style="width:100%" /></el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="playVisible=false">取消</el-button><el-button type="primary" @click="doSavePlay" :loading="saving">保存</el-button>
-      </template>
-    </el-dialog>
-
-    <el-dialog title="复制玩法" v-model="copyVisible" width="480px">
-      <el-form label-width="100px">
-        <el-form-item label="来源赛事"><el-select v-model="copyFrom" placeholder="选择赛事" style="width:100%" filterable><el-option v-for="m in matchOptions" :key="m._id" :label="m.name+' ('+m.teamA+' vs '+m.teamB+')'" :value="m._id" /></el-select></el-form-item>
-        <el-form-item label="目标赛事"><el-input :value="matchName" disabled /></el-form-item>
-      </el-form>
-      <template #footer><el-button @click="copyVisible=false">取消</el-button><el-button type="primary" @click="doCopy">确认复制</el-button></template>
-    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { getMatchList, getPlayList, createPlay, updatePlay, deletePlay, setPlayWin, copyPlays, getCategoryTree } from '@/api'
+import { getMatchList, getPlayList, updatePlay, followPlay, stopPlay } from '@/api'
 
-const route = useRoute(); const matchId = route.params.id
-const matchName = ref(''); const loading = ref(false); const saving = ref(false); const list = ref([])
+const route = useRoute()
+const matchId = route.params.id
+const matchName = ref('')
+const matchInfo = ref(null)
+const loading = ref(false)
+const list = ref([])
 
 const loadList = async () => {
   loading.value = true
-  try { const res = await getPlayList({ matchId, pageSize: 500 }); list.value = res.data.list || [] } catch (e) { console.error(e) }
+  try {
+    const res = await getPlayList({ matchId, pageSize: 500 })
+    list.value = res.data.list || []
+  } catch (e) { console.error(e) }
   loading.value = false
 }
 const loadMatch = async () => {
   const res = await getMatchList({ pageSize: 500 })
-  const m = (res.data.list||[]).find(m=>m._id===matchId)
-  if(m) matchName.value = m.name+' ('+m.teamA+' vs '+m.teamB+')'
+  const m = (res.data.list || []).find(m => m._id === matchId)
+  if (m) {
+    matchInfo.value = m
+    matchName.value = (m.ccId ? m.ccId + ' ' : '') + (m.teamA || '') + ' vs ' + (m.teamB || '')
+  }
 }
-const catOptions = ref([])
-const loadCats = async () => {
-  const res = await getCategoryTree()
-  catOptions.value = (res.data.tree||[]).map(big=>({_id:big._id,name:big.name,children:(big.children||[]).map(s=>({_id:s._id,name:s.name}))}))
-}
-const matchOptions = ref([])
-const loadMOptions = async () => {
-  const res = await getMatchList({ pageSize: 500 })
-  matchOptions.value = (res.data.list||[]).filter(m=>m._id!==matchId)
-}
-onMounted(()=>{loadMatch();loadList();loadCats();loadMOptions()})
+onMounted(() => { loadMatch(); loadList() })
 
-const playVisible=ref(false),isPlayEdit=ref(false),editPlayId=ref('')
-const playForm=reactive({categoryId:'',name:'',label:'',sort:0,odds:1.87})
-const playDialogTitle=computed(()=>isPlayEdit.value?'编辑玩法':'新增玩法')
-const openPlayDialog=(row)=>{
-  isPlayEdit.value=!!row
-  if(row){editPlayId.value=row._id;playForm.categoryId=row.categoryId;playForm.name=row.name;playForm.label=row.label||'';playForm.sort=row.sort||0;playForm.odds=row.odds}
-  else{editPlayId.value='';Object.assign(playForm,{categoryId:'',name:'',label:'',sort:0,odds:1.87})}
-  playVisible.value=true
+const updateOdds = async (row, val) => {
+  try {
+    await updatePlay(row._id, { odds: val, _oldOdds: row.odds })
+    row.manualOdds = true
+    ElMessage.success('赔率已覆盖（同步不再覆盖此玩法）')
+  } catch (e) { ElMessage.error(e.message || '失败'); loadList() }
 }
-const doSavePlay=async()=>{
-  if(!playForm.categoryId||!playForm.name){ElMessage.warning('请填写必填项');return}
-  saving.value=true
-  try{isPlayEdit.value?await updatePlay(editPlayId.value,{...playForm,_oldOdds:list.value.find(p=>p._id===editPlayId.value)?.odds}):await createPlay({...playForm,matchId});playVisible.value=false;loadList();ElMessage.success('保存成功')}
-  catch(e){ElMessage.error(e.message||'操作失败')}
-  saving.value=false
-}
-const doDelete=async(row)=>{try{await deletePlay(row._id);ElMessage.success(row.deleted?'已删除':'已下架');loadList()}catch(e){ElMessage.error(e.message||'删除失败')}}
-const updateSort=async(row,val)=>{try{await updatePlay(row._id,{sort:val})}catch(e){ElMessage.error(e.message||'失败');loadList()}}
-const updateOdds=async(row,val)=>{try{await updatePlay(row._id,{odds:val,_oldOdds:row.odds})}catch(e){ElMessage.error(e.message||'失败');loadList()}}
-const setWin=async(row,val)=>{try{await setPlayWin(row._id,val)}catch(e){ElMessage.error(e.message||'失败');loadList()}}
 
-const copyVisible=ref(false),copyFrom=ref('')
-const openCopyDialog=()=>{copyVisible.value=true;copyFrom.value=''}
-const doCopy=async()=>{
-  if(!copyFrom.value){ElMessage.warning('请选择来源赛事');return}
-  try{await copyPlays(copyFrom.value,matchId);ElMessage.success('已复制');copyVisible.value=false;loadList()}
-  catch(e){ElMessage.error(e.message||'复制失败')}
+const toggleStop = async (row, val) => {
+  try {
+    await stopPlay(row._id, val)
+    row.manualStop = true
+    ElMessage.success(val ? '已停售（同步不再覆盖）' : '已恢复销售')
+  } catch (e) { ElMessage.error(e.message || '失败'); loadList() }
+}
+
+const doFollow = async (row) => {
+  try {
+    await followPlay(row._id)
+    ElMessage.success('已恢复跟随接口赔率')
+    loadList()
+  } catch (e) { ElMessage.error(e.message || '失败') }
+}
+
+const resultText = (r) => ({ win: '中', half_win: '半赢', push: '走盘', half_lose: '半输', lose: '未中' }[r] || r)
+const resultType = (r) => ({ win: 'success', half_win: 'success', push: 'info', half_lose: 'warning', lose: 'danger' }[r] || 'info')
+
+// 盘口数值 -> 中文(与移动端 detail.vue 保持一致)
+const pankouText = (row) => {
+  const n = row.handicap
+  const v = Math.abs(n)
+  const map = [
+    [0, '平手'], [0.25, '平手/半球'], [0.5, '半球'], [0.75, '半球/一球'],
+    [1, '一球'], [1.25, '一球/一球半'], [1.5, '一球半'], [1.75, '一球半/二球'],
+    [2, '二球'], [2.25, '二球/二球半'], [2.5, '二球半'], [2.75, '二球半/三球'],
+    [3, '三球'], [3.25, '三球/三球半'], [3.5, '三球半'], [3.75, '三球半/四球'],
+    [4, '四球'], [4.25, '四球/四球半'], [4.5, '四球半'], [4.75, '四球半/五球'], [5, '五球']
+  ]
+  let text = ''
+  for (const [k, t] of map) {
+    if (Math.abs(v - k) < 0.001) { text = t; break }
+  }
+  if (!text) text = String(v)
+  const isAsia = row.side === 'home' || row.side === 'away'
+  if (!isAsia) return text // 大小球: 直接显示"二球半"
+  if (n === 0) return '平手'
+  return n < 0 ? ('让' + text) : ('受让' + text)
 }
 </script>
 
 <style lang="scss" scoped>
-.match-plays .page-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;h2{margin:0}}
+.match-plays .page-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; h2 { margin:0; } }
 </style>

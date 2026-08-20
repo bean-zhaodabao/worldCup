@@ -1,12 +1,14 @@
 /**
  * 串关购物车 - 跨页面共享的投注选择状态
  *
- * 规则：
- * - 一场比赛只能选一个玩法
- * - 串关必须来自不同场次（同一场比赛不能重复加入）
- * - 单关下注不走购物车，直接打开 bet-sheet
+ * 规则（2026-08-20 客户确认）:
+ * - 串关 2~8 场, 同场只能选 1 个玩法(同一场比赛不能重复加入)
+ * - 不同玩法类型可混合(胜平负/让球/比分/总进球/半全场/让球盘/大小球)
+ * - 赔率相乘, 全中方赢; 下单时以服务端实时赔率为准
  */
 import { reactive, computed } from 'vue'
+
+export const MAX_PARLAY = 8
 
 const state = reactive({
   items: []
@@ -37,7 +39,10 @@ export const betCart = {
    * @param {string} entry.playId
    * @param {string} entry.playName
    * @param {string} entry.playLabel
-   * @param {number} entry.odds
+   * @param {number} entry.odds - 十进制赔率(水位玩法=1+水位)
+   * @param {string} entry.water - 水位显示(如0.85), 盘口玩法才有
+   * @param {number} entry.handicap - 盘口数值
+   * @param {string} entry.sourceKey - 接口玩法键
    * @param {string} entry.categoryName
    * @param {string} entry.bigCategoryName
    * @param {string} entry.matchId
@@ -51,11 +56,18 @@ export const betCart = {
     if (state.items.some(i => i.matchId === entry.matchId)) {
       return { ok: false, message: '该场次已在串关列表中，请选择其他场次' }
     }
+    // 最多8场
+    if (state.items.length >= MAX_PARLAY) {
+      return { ok: false, message: '串关最多 ' + MAX_PARLAY + ' 场' }
+    }
     state.items.push({
       playId: entry.playId,
       playName: entry.playName,
       playLabel: entry.playLabel || '',
       odds: entry.odds,
+      water: entry.water || '',
+      handicap: entry.handicap,
+      sourceKey: entry.sourceKey || '',
       categoryName: entry.categoryName || '',
       bigCategoryName: entry.bigCategoryName || '',
       matchId: entry.matchId,
@@ -84,11 +96,13 @@ export const betCart = {
   },
 
   /** 更新指定 play 的赔率（赔率变化时由外部调用） */
-  updateOdds(playId, newOdds) {
+  updateOdds(playId, newOdds, newWater) {
     const item = state.items.find(i => i.playId === playId)
-    if (item && item.odds !== newOdds) {
+    if (!item) return false
+    if (item.odds !== newOdds || (newWater !== undefined && item.water !== newWater)) {
       item.odds = newOdds
-      return true  // 表示有变化
+      if (newWater !== undefined) item.water = newWater
+      return true // 表示有变化
     }
     return false
   },

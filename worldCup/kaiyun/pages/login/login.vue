@@ -40,7 +40,8 @@ const handleLogin = async () => {
       uni.setStorageSync('token', res.result.data.token)
       uni.setStorageSync('userInfo', JSON.stringify({
         _id: res.result.data.userId,
-        username: res.result.data.username
+        username: res.result.data.username,
+        type: res.result.data.type || 'retail'
       }))
       uni.reLaunch({ url: '/pages/index/index' })
     } else {

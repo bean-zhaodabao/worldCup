@@ -16,34 +16,88 @@
     "name": {
       "bsonType": "string",
       "title": "玩法名称",
-      "description": "例如: 0-1、2-3、胜、平、负"
+      "description": "如: 胜、平、负、1:0、0-1球、胜胜、大、小、主、客"
     },
     "label": {
       "bsonType": "string",
-      "title": "玩法标识",
-      "description": "简短标识，如 total_0_1"
+      "title": "玩法标识"
     },
     "odds": {
       "bsonType": "double",
-      "title": "赔率",
-      "minimum": 1.01
+      "title": "展示赔率(十进制)",
+      "description": "竞彩玩法为官方赔率；亚盘/大小球=水位+1(如0.85水位存1.85)；区间玩法为派生合并赔率",
+      "minimum": 1
+    },
+    "sourceKey": {
+      "bsonType": "string",
+      "title": "接口玩法键",
+      "description": "如 spf:3、rqspf:1@-1、bf:sw21、jq:r01、bqc:ht10、asia:home@-1.25、dxq:over@2.75，同步upsert幂等依据"
+    },
+    "isSource": {
+      "bsonType": "bool",
+      "title": "是否接口同步玩法",
+      "default": false
+    },
+    "stop": {
+      "bsonType": "bool",
+      "title": "停售标志",
+      "description": "接口stop=true时自动置true，移动端不可投注",
+      "default": false
+    },
+    "manualOdds": {
+      "bsonType": "bool",
+      "title": "赔率人工覆盖标记",
+      "description": "管理端手工改过赔率后为true，同步只更新原始赔率不覆盖展示赔率；恢复跟随后置false",
+      "default": false
+    },
+    "oddsSource": {
+      "bsonType": "double",
+      "title": "原始赔率(接口)"
+    },
+    "oddsFirst": {
+      "bsonType": "double",
+      "title": "初始赔率(接口)"
+    },
+    "oddsStat": {
+      "bsonType": "object",
+      "title": "赔率统计(接口)",
+      "description": "spf/rqspf 的 frist/last/max/min/changeCount"
+    },
+    "handicap": {
+      "bsonType": "double",
+      "title": "盘口数值",
+      "description": "让球盘为负(主让球，如-1.25)；让球胜平负为goal(如+1或-1)；大小球为正(如2.75)"
+    },
+    "side": {
+      "bsonType": "string",
+      "title": "盘口侧",
+      "enum": ["home", "away", "over", "under"]
+    },
+    "water": {
+      "bsonType": "string",
+      "title": "水位显示",
+      "description": "香港盘水位原文，如0.85"
+    },
+    "result": {
+      "bsonType": "string",
+      "title": "结算结果",
+      "enum": ["win", "lose", "push", "half_win", "half_lose"],
+      "description": "自动结算引擎按赛果计算"
     },
     "isWin": {
       "bsonType": "bool",
-      "title": "是否中奖",
-      "description": "管理员手动设定",
+      "title": "是否中奖(兼容旧字段)",
+      "description": "自动结算时同步设置，win/half_win为true",
       "default": false
     },
     "deleted": {
       "bsonType": "bool",
       "title": "下架标记",
-      "description": "true表示已下架，移动端不可见",
       "default": false
     },
     "sort": {
       "bsonType": "int",
       "title": "排序",
-      "description": "数字越小越靠前",
       "default": 0
     },
     "createTime": { "bsonType": "date" },

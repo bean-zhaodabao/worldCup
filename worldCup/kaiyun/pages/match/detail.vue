@@ -2,28 +2,31 @@
   <view class="match-detail">
     <!-- 赛事信息 -->
     <view class="match-info">
+      <view class="match-top">
+        <text class="cc-tag" v-if="match.ccId">{{ match.ccId }}</text>
+        <text class="league">{{ match.leagueName || match.name }}</text>
+        <text class="state" v-if="match.displayState">{{ match.displayState }}</text>
+      </view>
       <view class="teams">
         <view class="team">
           <image :src="match.teamAFlag || '/static/football.png'" mode="aspectFit" class="flag" />
           <text>{{ match.teamA }}</text>
         </view>
-        <text class="vs">VS</text>
+        <view class="vs-box">
+          <text class="vs">VS</text>
+          <text class="time">{{ formatTime(match.startTime) }}</text>
+        </view>
         <view class="team">
           <image :src="match.teamBFlag || '/static/football.png'" mode="aspectFit" class="flag" />
           <text>{{ match.teamB }}</text>
         </view>
       </view>
-      <text class="time">开赛时间: {{ formatTime(match.startTime) }}</text>
-      <text class="status">{{ statusMap[match.status] || '未知' }}</text>
+      <text class="sync-time" v-if="match.syncedAt">数据更新时间: {{ formatTime(match.syncedAt) }}</text>
     </view>
 
-    <!-- 大类Tab栏（可左右滑动） -->
+    <!-- 大类Tab栏 -->
     <scroll-view scroll-x class="category-tabs" :show-scrollbar="false">
-      <view
-        class="tab-item"
-        :class="{ active: activeTab === 'all' }"
-        @click="activeTab = 'all'"
-      >全部玩法</view>
+      <view class="tab-item" :class="{ active: activeTab === 'all' }" @click="activeTab = 'all'">全部玩法</view>
       <view
         v-for="cat in categoryPlays"
         :key="cat.name"
@@ -33,29 +36,48 @@
       >{{ cat.name }}</view>
     </scroll-view>
 
-    <!-- 玩法列表（大类 → 小类 → 玩法） -->
+    <!-- 玩法区: 大类 → 小类 -->
     <view class="play-section" v-for="bigCat in displayCategories" :key="bigCat.name">
-      <!-- 大类标题（仅全部玩法tab时显示） -->
       <view class="big-cat-title" v-if="activeTab === 'all'">{{ bigCat.name }}</view>
 
-      <!-- 小类 -->
       <view class="sub-category" v-for="sub in bigCat.subCategories" :key="sub.name">
-        <view class="sub-cat-title">{{ sub.name }}</view>
-        <view
-          class="play-grid"
-          :style="{ gridTemplateColumns: getGridColumns(sub.plays.length) }"
-        >
+        <view class="sub-cat-title">
+          <text>{{ subTitle(sub) }}</text>
+          <text class="rq-hint" v-if="sub.name === '让球胜平负' && rqGoal(sub) !== null">{{ rqGoalText(sub) }}</text>
+        </view>
+
+        <!-- 盘口表格(让球盘/大小球) -->
+        <view class="pankou-table" v-if="sub.handicapPlays">
+          <view class="pk-row pk-head">
+            <text class="pk-col pk-line">盘口</text>
+            <text class="pk-col">{{ sub.name === '让球盘' ? match.teamA : '大球' }}</text>
+            <text class="pk-col">{{ sub.name === '让球盘' ? match.teamB : '小球' }}</text>
+          </view>
+          <view class="pk-row" v-for="row in sub.handicapPlays" :key="row.handicap">
+            <text class="pk-col pk-line">{{ handicapText(row.handicap, sub.name) }}</text>
+            <view class="pk-col pk-cell" v-if="row.home" :class="{ selected: selectedPlay._id === row.home._id }" @click="selectPlay(row.home)">
+              <text class="pk-water">{{ row.home.water || row.home.odds }}</text>
+            </view>
+            <view class="pk-col pk-cell empty" v-else><text>-</text></view>
+            <view class="pk-col pk-cell" v-if="row.away" :class="{ selected: selectedPlay._id === row.away._id }" @click="selectPlay(row.away)">
+              <text class="pk-water">{{ row.away.water || row.away.odds }}</text>
+            </view>
+            <view class="pk-col pk-cell empty" v-else><text>-</text></view>
+          </view>
+        </view>
+
+        <!-- 普通玩法宫格 -->
+        <view v-else class="play-grid" :style="{ gridTemplateColumns: getGridColumns(sub.plays.length) }">
           <view
             class="play-item"
             v-for="play in sub.plays"
             :key="play._id"
             @click="selectPlay(play)"
-            :class="{
-              selected: selectedPlay._id === play._id
-            }"
+            :class="{ selected: selectedPlay._id === play._id, disabled: play.odds === null }"
           >
             <text class="play-name">{{ play.name }}</text>
             <text class="play-odds">{{ play.odds }}</text>
+            <text class="play-single-badge" v-if="!canSingle(play)">仅串关</text>
           </view>
         </view>
       </view>
@@ -66,25 +88,21 @@
       <text>该赛事暂无玩法</text>
     </view>
 
-    <!-- 串关提示条：当前场次已在购物车中 -->
+    <!-- 串关提示条 -->
     <view class="cart-notice" v-if="isMatchInCart">
       <text>📌 该场次已在串关列表中</text>
       <text class="cart-notice-action" @click="removeFromCart">移出串关</text>
     </view>
-
-    <!-- 串关提示条：正常加入 -->
     <view class="cart-notice success" v-else-if="cartCount > 0">
       <text>当前串关单已有 {{ cartCount }} 场，可继续选择其他场次</text>
     </view>
 
-    <!-- 底部下单栏（仅未开始赛事显示） -->
-    <view class="bottom-bar" v-if="match.status === 'upcoming'">
-      <!-- 未选择玩法 / 场次已加入串关 -->
+    <!-- 底部下单栏 -->
+    <view class="bottom-bar">
       <view class="no-select" v-if="!selectedPlay._id && !isMatchInCart">
         <text class="hint">请选择一个玩法</text>
       </view>
 
-      <!-- 场次已在串关中：只显示移除按钮 -->
       <view class="action-row" v-if="isMatchInCart">
         <view class="selected-info">
           <text class="sel-play cart-added-text">已在串关列表中</text>
@@ -94,11 +112,10 @@
         </view>
       </view>
 
-      <!-- 正常已选玩法 -->
       <view class="action-row" v-else-if="selectedPlay._id">
         <view class="selected-info">
-          <text class="sel-play">{{ selectedPlay.name }}</text>
-          <text class="sel-odds">赔率 @{{ selectedPlay.odds }}</text>
+          <text class="sel-play">{{ selectedDisplayName }}</text>
+          <text class="sel-odds">@{{ selectedOddsText }}</text>
         </view>
         <view class="btn-group">
           <button class="bet-btn single" @click="singleBet">单关下注</button>
@@ -145,94 +162,145 @@ import { betCart } from '@/stores/betCart.js'
 import { startPolling, stopPolling } from '@/utils/oddsPoller.js'
 
 const match = ref({})
-const selectedPlay = ref({})       // 当前选中的单个玩法
-const showSingleSheet = ref(false) // 单关弹窗
-const showCartSheet = ref(false)   // 串关弹窗
+const selectedPlay = ref({})
+const showSingleSheet = ref(false)
+const showCartSheet = ref(false)
 const categoryPlays = ref([])
 const loaded = ref(false)
 const currentOddsVersion = ref(0)
-const activeTab = ref('all')       // 当前选中的大类tab，'all'=全部玩法
-
-/** 将每个大类的玩法按小类(categoryName)二次分组 */
-const subGroupedCategories = computed(() => {
-  return categoryPlays.value.map(bigCat => {
-    const subMap = {}
-    for (const play of bigCat.plays) {
-      const key = play.categoryName || bigCat.name
-      if (!subMap[key]) subMap[key] = { name: key, plays: [] }
-      subMap[key].plays.push(play)
-    }
-    return {
-      name: bigCat.name,
-      subCategories: Object.values(subMap)
-    }
-  })
-})
-
-/** 根据选中的tab过滤要显示的大类 */
-const displayCategories = computed(() => {
-  if (activeTab.value === 'all') return subGroupedCategories.value
-  return subGroupedCategories.value.filter(c => c.name === activeTab.value)
-})
-
-/** 根据玩法数量返回 grid-template-columns */
-const getGridColumns = (count) => {
-  if (count === 1) return '1fr'
-  if (count === 3) return '1fr 1fr 1fr'
-  return '1fr 1fr'  // 2, 4, 5, 6...
-}
-
-const statusMap = { upcoming: '未开始', live: '进行中', finished: '已结束', settled: '已结算' }
+const activeTab = ref('all')
 
 const cartCount = computed(() => betCart.count)
 const cartTotalOdds = computed(() => betCart.totalOdds)
 const cartItems = computed(() => betCart.items)
 
-// 当前场次是否已在串关购物车中
-const isMatchInCart = computed(() => {
-  return betCart.hasMatch(match.value._id)
+const isMatchInCart = computed(() => betCart.hasMatch(match.value._id))
+
+const displayCategories = computed(() => {
+  if (activeTab.value === 'all') return categoryPlays.value
+  return categoryPlays.value.filter(c => c.name === activeTab.value)
 })
 
 const formatTime = (t) => {
   if (!t) return ''
   const d = new Date(t)
-  return d.getFullYear() + '-' +
-    String(d.getMonth() + 1).padStart(2, '0') + '-' +
-    String(d.getDate()).padStart(2, '0') + ' ' +
-    String(d.getHours()).padStart(2, '0') + ':' +
-    String(d.getMinutes()).padStart(2, '0')
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0')
 }
 
-/** 单选玩法 */
+/** 是否允许单关(竞彩规则) */
+const canSingle = (play) => {
+  const key = play.sourceKey || ''
+  if (key.indexOf('spf:') === 0) {
+    return (match.value.description || '').indexOf('单关') >= 0
+  }
+  if (key.indexOf('rqspf:') === 0) return false
+  return true
+}
+
+/** 小类标题 */
+const subTitle = (sub) => sub.name
+
+/** 让球胜平负: 让球数 */
+const rqGoal = (sub) => {
+  if (!sub.plays || sub.plays.length === 0) return null
+  return sub.plays[0].handicap
+}
+const rqGoalText = (sub) => {
+  const g = rqGoal(sub)
+  if (g === null) return ''
+  if (g === 0) return '(平手)'
+  return g > 0 ? '(主队受让' + g + '球)' : '(主队让' + Math.abs(g) + '球)'
+}
+
+/** 盘口数值 -> 中文 */
+const handicapText = (n, subName) => {
+  const v = Math.abs(n)
+  const map = [
+    [0, '平手'], [0.25, '平手/半球'], [0.5, '半球'], [0.75, '半球/一球'],
+    [1, '一球'], [1.25, '一球/一球半'], [1.5, '一球半'], [1.75, '一球半/二球'],
+    [2, '二球'], [2.25, '二球/二球半'], [2.5, '二球半'], [2.75, '二球半/三球'],
+    [3, '三球'], [3.25, '三球/三球半'], [3.5, '三球半'], [3.75, '三球半/四球'],
+    [4, '四球'], [4.25, '四球/四球半'], [4.5, '四球半'], [4.75, '四球半/五球'], [5, '五球']
+  ]
+  let text = ''
+  for (const [k, t] of map) {
+    if (Math.abs(v - k) < 0.001) { text = t; break }
+  }
+  if (!text) text = String(v)
+  if (subName === '大小球') return text
+  if (n === 0) return '平手'
+  return n < 0 ? ('让' + text) : ('受让' + text)
+}
+
+/** 选中玩法显示名 */
+const selectedDisplayName = computed(() => {
+  const p = selectedPlay.value
+  if (!p._id) return ''
+  let name = p.name
+  if (p.handicap !== undefined && p.handicap !== null) {
+    const sideText = { home: '主', away: '客', over: '大', under: '小' }[p.side] || ''
+    if (sideText === name) name = sideText + ' ' + handicapText(p.handicap, p.side === 'over' || p.side === 'under' ? '大小球' : '让球盘')
+    else name = name + ' ' + handicapText(p.handicap, p.side === 'over' || p.side === 'under' ? '大小球' : '让球盘')
+  }
+  return name
+})
+
+const selectedOddsText = computed(() => {
+  const p = selectedPlay.value
+  if (!p._id) return ''
+  return p.water || String(p.odds)
+})
+
+const getGridColumns = (count) => {
+  if (count === 1) return '1fr'
+  if (count === 3) return '1fr 1fr 1fr'
+  return '1fr 1fr'
+}
+
 const selectPlay = (play) => {
-  if (isMatchInCart.value) return // 已在串关中，不可以再选
+  if (isMatchInCart.value) {
+    uni.showToast({ title: '该场次已在串关列表中', icon: 'none' })
+    return
+  }
   if (selectedPlay.value._id === play._id) {
-    selectedPlay.value = {}  // 取消选中
+    selectedPlay.value = {}
   } else {
     selectedPlay.value = { ...play }
   }
 }
 
-/** 单关下注 - 直接用当前选中的玩法下单 */
+/** 单关下注(带单关限制) */
 const singleBet = () => {
   if (!selectedPlay.value._id) return
+  if (!canSingle(selectedPlay.value)) {
+    const key = selectedPlay.value.sourceKey || ''
+    if (key.indexOf('rqspf:') === 0) {
+      uni.showToast({ title: '让球胜平负不支持单关，请加入串关', icon: 'none' })
+    } else {
+      uni.showToast({ title: '该场次未开放单关，请加入串关', icon: 'none' })
+    }
+    return
+  }
   showSingleSheet.value = true
 }
 
-/** 加入串关购物车 */
 const addToCart = () => {
   if (!selectedPlay.value._id) return
   if (isMatchInCart.value) {
     uni.showToast({ title: '该场次已在串关列表中', icon: 'none' })
     return
   }
+  const p = selectedPlay.value
   const result = betCart.add({
-    playId: selectedPlay.value._id,
-    playName: selectedPlay.value.name,
-    playLabel: selectedPlay.value.label || '',
-    odds: selectedPlay.value.odds,
-    categoryName: selectedPlay.value.categoryName || '',
-    bigCategoryName: selectedPlay.value.bigCategoryName || '',
+    playId: p._id,
+    playName: p.name,
+    playLabel: p.label || '',
+    odds: p.odds,
+    water: p.water || '',
+    handicap: p.handicap,
+    sourceKey: p.sourceKey || '',
+    categoryName: p.categoryName || '',
+    bigCategoryName: p.bigCategoryName || '',
     matchId: match.value._id,
     matchName: match.value.name || '',
     teamA: match.value.teamA || '',
@@ -240,29 +308,21 @@ const addToCart = () => {
   })
   if (result.ok) {
     uni.showToast({ title: '已加入串关，可继续选择其他场次', icon: 'success', duration: 1500 })
-    selectedPlay.value = {}  // 清空当前选择
+    selectedPlay.value = {}
   } else {
     uni.showToast({ title: result.message || '加入失败', icon: 'none' })
   }
 }
 
-/** 打开串关下注弹窗 */
-const showCartBet = () => {
-  showCartSheet.value = true
-}
+const showCartBet = () => { showCartSheet.value = true }
 
-/** 从串关弹窗中移除某个玩法（bet-sheet ×按钮回调） */
-const onCartRemovePlay = ({ playId }) => {
-  betCart.remove(playId)
-}
+const onCartRemovePlay = ({ playId }) => { betCart.remove(playId) }
 
-/** 从串关购物车中移除当前场次（详情页直接移除） */
 const removeFromCart = () => {
   betCart.removeByMatch(match.value._id)
   uni.showToast({ title: '已移出串关', icon: 'success', duration: 1200 })
 }
 
-/** 单关下单确认 */
 const handleSingleConfirm = async (betData) => {
   showSingleSheet.value = false
   try {
@@ -270,7 +330,6 @@ const handleSingleConfirm = async (betData) => {
       name: 'user-order',
       data: {
         token: uni.getStorageSync('token'),
-        matchId: match.value._id,
         playIds: betData.playIds,
         betAmount: betData.betAmount,
         isParlay: false
@@ -278,8 +337,9 @@ const handleSingleConfirm = async (betData) => {
     })
     const result = res.result
     if (result && result.code === 0) {
+      // 以服务端实时赔率为准
       uni.showToast({
-        title: '下单成功！可赢 ¥' + (betData.totalOdds * betData.betAmount).toFixed(2),
+        title: '下单成功！可赢 ¥' + result.data.winAmount.toFixed(2) + (result.data.balance !== undefined ? '，余额 ¥' + result.data.balance.toFixed(2) : ''),
         icon: 'success', duration: 2000
       })
       selectedPlay.value = {}
@@ -292,7 +352,6 @@ const handleSingleConfirm = async (betData) => {
   }
 }
 
-/** 串关下单确认 */
 const handleCartConfirm = async (betData) => {
   showCartSheet.value = false
   try {
@@ -300,7 +359,6 @@ const handleCartConfirm = async (betData) => {
       name: 'user-order',
       data: {
         token: uni.getStorageSync('token'),
-        matchIds: betCart.getMatchIds(),
         playIds: betData.playIds,
         betAmount: betData.betAmount,
         isParlay: true
@@ -309,10 +367,10 @@ const handleCartConfirm = async (betData) => {
     const result = res.result
     if (result && result.code === 0) {
       uni.showToast({
-        title: '串关下单成功！可赢 ¥' + (betData.totalOdds * betData.betAmount).toFixed(2),
+        title: '串关下单成功！可赢 ¥' + result.data.winAmount.toFixed(2),
         icon: 'success', duration: 2000
       })
-      betCart.clear()  // 清空购物车
+      betCart.clear()
       selectedPlay.value = {}
     } else {
       uni.showToast({ title: (result && result.message) || '下单失败', icon: 'error' })
@@ -323,7 +381,6 @@ const handleCartConfirm = async (betData) => {
   }
 }
 
-/** 拉取比赛详情数据 */
 const fetchMatchData = async (matchId) => {
   try {
     const res = await uniCloud.callFunction({
@@ -335,34 +392,23 @@ const fetchMatchData = async (matchId) => {
       if (matchData) {
         const oldOddsMap = {}
         for (const cat of categoryPlays.value) {
-          for (const p of cat.plays) {
-            oldOddsMap[p._id] = p.odds
+          for (const sub of cat.subCategories || []) {
+            for (const p of sub.plays || []) oldOddsMap[p._id] = p.odds
           }
         }
         match.value = matchData
         categoryPlays.value = matchData.categoryPlays || []
         currentOddsVersion.value = matchData.oddsVersion || 0
 
-        // 如果已选中的玩法赔率变了，更新 selectedPlay
         if (selectedPlay.value._id) {
-          for (const cat of matchData.categoryPlays || []) {
-            const found = cat.plays.find(p => p._id === selectedPlay.value._id)
-            if (found) {
-              selectedPlay.value = { ...found }
-              break
-            }
-          }
+          const found = findAllPlays(matchData).find(p => p._id === selectedPlay.value._id)
+          if (found) selectedPlay.value = { ...found }
         }
 
-        // 同步购物车中的赔率
         let cartChanged = false
-        for (const cat of matchData.categoryPlays || []) {
-          for (const p of cat.plays) {
-            if (oldOddsMap[p._id] !== undefined && oldOddsMap[p._id] !== p.odds) {
-              if (betCart.updateOdds(p._id, p.odds)) {
-                cartChanged = true
-              }
-            }
+        for (const p of findAllPlays(matchData)) {
+          if (oldOddsMap[p._id] !== undefined && oldOddsMap[p._id] !== p.odds) {
+            if (betCart.updateOdds(p._id, p.odds, p.water)) cartChanged = true
           }
         }
         if (cartChanged) {
@@ -375,6 +421,22 @@ const fetchMatchData = async (matchId) => {
   }
 }
 
+function findAllPlays(matchData) {
+  const out = []
+  for (const cat of matchData.categoryPlays || []) {
+    for (const sub of cat.subCategories || []) {
+      for (const p of sub.plays || []) out.push(p)
+      if (sub.handicapPlays) {
+        for (const row of sub.handicapPlays) {
+          if (row.home) out.push(row.home)
+          if (row.away) out.push(row.away)
+        }
+      }
+    }
+  }
+  return out
+}
+
 let pollingMatchId = ''
 
 onLoad(async (options) => {
@@ -385,11 +447,10 @@ onLoad(async (options) => {
   await fetchMatchData(matchId)
   loaded.value = true
 
-  // 启动赔率轮询
   startPolling({
     matchIds: [matchId],
     versions: { [matchId]: currentOddsVersion.value },
-    onChange: async (changedIds) => {
+    onChange: async () => {
       await fetchMatchData(matchId)
     }
   })
@@ -405,12 +466,24 @@ onUnload(() => {
 
 .match-info {
   background: linear-gradient(135deg, #1a237e, #0d47a1);
-  padding: 40rpx; color: #fff; text-align: center;
+  padding: 30rpx 40rpx; color: #fff; text-align: center;
+  .match-top {
+    display: flex; align-items: center; justify-content: center; gap: 12rpx;
+    margin-bottom: 20rpx;
+    .cc-tag { font-size: 22rpx; background: rgba(255,255,255,0.2); padding: 4rpx 14rpx; border-radius: 10rpx; }
+    .league { font-size: 26rpx; opacity: 0.9; }
+    .state { font-size: 22rpx; color: #ffcdd2; }
+  }
   .teams { display: flex; justify-content: center; align-items: center; gap: 30rpx; }
-  .team { display: flex; flex-direction: column; align-items: center; .flag { width: 80rpx; height: 60rpx; border-radius: 8rpx; background: rgba(255,255,255,0.2); } }
-  .vs { font-size: 40rpx; font-weight: bold; }
-  .time { display: block; margin-top: 20rpx; font-size: 26rpx; opacity: 0.8; }
-  .status { display: inline-block; margin-top: 10rpx; font-size: 24rpx; padding: 4rpx 20rpx; border-radius: 20rpx; background: rgba(255,255,255,0.2); }
+  .team { display: flex; flex-direction: column; align-items: center; width: 200rpx;
+    .flag { width: 80rpx; height: 60rpx; border-radius: 8rpx; background: rgba(255,255,255,0.2); }
+    text { font-size: 30rpx; font-weight: bold; margin-top: 8rpx; }
+  }
+  .vs-box { display: flex; flex-direction: column; align-items: center;
+    .vs { font-size: 40rpx; font-weight: bold; }
+    .time { font-size: 24rpx; opacity: 0.85; margin-top: 8rpx; }
+  }
+  .sync-time { display: block; margin-top: 16rpx; font-size: 22rpx; opacity: 0.7; }
 }
 
 // ============ 大类Tab栏 ============
@@ -439,16 +512,50 @@ onUnload(() => {
   .sub-cat-title {
     font-size: 26rpx; color: #666; margin-bottom: 10rpx; padding-left: 8rpx;
     border-left: 4rpx solid #1a237e; line-height: 1.2;
+    display: flex; align-items: center; gap: 10rpx;
+    .rq-hint { font-size: 22rpx; color: #ef6c00; }
   }
   .play-grid {
     display: grid; gap: 12rpx;
   }
   .play-item {
+    position: relative;
     padding: 16rpx; background: #f5f5f5; border-radius: 12rpx;
     text-align: center; border: 2rpx solid transparent;
     .play-name { display: block; font-size: 26rpx; color: #333; }
     .play-odds { display: block; font-size: 32rpx; color: #d32f2f; font-weight: bold; margin-top: 8rpx; }
+    .play-single-badge {
+      position: absolute; top: 6rpx; right: 6rpx;
+      font-size: 18rpx; color: #999; background: #eee;
+      padding: 2rpx 8rpx; border-radius: 8rpx;
+    }
     &.selected { border-color: #1a237e; background: #e8eaf6; }
+  }
+}
+
+// ============ 盘口表格 ============
+.pankou-table {
+  border: 1rpx solid #eee; border-radius: 12rpx; overflow: hidden;
+  .pk-row {
+    display: flex; align-items: stretch;
+    border-bottom: 1rpx solid #f0f0f0;
+    &:last-child { border-bottom: none; }
+  }
+  .pk-col {
+    flex: 1; text-align: center; font-size: 26rpx; color: #333;
+    padding: 16rpx 8rpx; display: flex; align-items: center; justify-content: center;
+    border-left: 1rpx solid #f0f0f0;
+    &:first-child { border-left: none; }
+  }
+  .pk-head {
+    background: #f5f5f5;
+    .pk-col { font-size: 24rpx; color: #666; }
+  }
+  .pk-line { font-weight: bold; color: #1a237e; }
+  .pk-cell {
+    &.selected { background: #e8eaf6; border: 2rpx solid #1a237e; border-radius: 4rpx; }
+    &.empty { color: #ddd; }
+    .pk-water { color: #d32f2f; font-weight: bold; }
   }
 }
 
@@ -499,7 +606,6 @@ onUnload(() => {
     }
   }
 
-  // 串关购物车条
   .cart-bar {
     margin-top: 16rpx; padding: 14rpx 20rpx;
     background: linear-gradient(135deg, #1a237e, #283593);
