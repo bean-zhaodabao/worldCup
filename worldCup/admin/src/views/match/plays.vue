@@ -1,7 +1,22 @@
 <template>
   <div class="match-plays">
     <div class="page-header">
-      <h2>赛事玩法 - {{ matchName }}</h2>
+      <h2 class="plays-title">
+        赛事玩法 -
+        <template v-if="matchInfo">
+          <span v-if="matchInfo.ccId">{{ matchInfo.ccId }} </span>
+          <span class="team-cell">
+            <img v-if="matchInfo.teamAFlag" :src="matchInfo.teamAFlag" class="team-flag" alt="" referrerpolicy="no-referrer" />
+            <span>{{ matchInfo.teamA }}</span>
+          </span>
+          <span class="vs">vs</span>
+          <span class="team-cell">
+            <img v-if="matchInfo.teamBFlag" :src="matchInfo.teamBFlag" class="team-flag" alt="" referrerpolicy="no-referrer" />
+            <span>{{ matchInfo.teamB }}</span>
+          </span>
+        </template>
+        <template v-else>{{ matchName }}</template>
+      </h2>
       <el-button icon="Refresh" @click="loadList">刷新</el-button>
     </div>
 
@@ -156,4 +171,8 @@ const pankouText = (row) => {
 
 <style lang="scss" scoped>
 .match-plays .page-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; h2 { margin:0; } }
+.plays-title { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.team-cell { display:inline-flex; align-items:center; gap:6px; }
+.team-flag { width:26px; height:20px; object-fit:contain; background:#f5f5f5; border-radius:2px; vertical-align:middle; }
+.vs { color:#d32f2f; font-size:16px; }
 </style>

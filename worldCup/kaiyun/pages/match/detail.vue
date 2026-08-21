@@ -56,11 +56,11 @@
           <view class="pk-row" v-for="row in sub.handicapPlays" :key="row.handicap">
             <text class="pk-col pk-line">{{ handicapText(row.handicap, sub.name) }}</text>
             <view class="pk-col pk-cell" v-if="row.home" :class="{ selected: selectedPlay._id === row.home._id }" @click="selectPlay(row.home)">
-              <text class="pk-water">{{ row.home.water || row.home.odds }}</text>
+              <text class="pk-water">{{ fmtOdds(row.home.water || row.home.odds) }}</text>
             </view>
             <view class="pk-col pk-cell empty" v-else><text>-</text></view>
             <view class="pk-col pk-cell" v-if="row.away" :class="{ selected: selectedPlay._id === row.away._id }" @click="selectPlay(row.away)">
-              <text class="pk-water">{{ row.away.water || row.away.odds }}</text>
+              <text class="pk-water">{{ fmtOdds(row.away.water || row.away.odds) }}</text>
             </view>
             <view class="pk-col pk-cell empty" v-else><text>-</text></view>
           </view>
@@ -76,7 +76,7 @@
             :class="{ selected: selectedPlay._id === play._id, disabled: play.odds === null }"
           >
             <text class="play-name">{{ play.name }}</text>
-            <text class="play-odds">{{ play.odds }}</text>
+            <text class="play-odds">{{ fmtOdds(play.odds) }}</text>
             <text class="play-single-badge" v-if="!canSingle(play)">仅串关</text>
           </view>
         </view>
@@ -160,6 +160,7 @@ import { onLoad, onUnload } from '@dcloudio/uni-app'
 import BetSheet from '@/components/bet-sheet/bet-sheet.vue'
 import { betCart } from '@/stores/betCart.js'
 import { startPolling, stopPolling } from '@/utils/oddsPoller.js'
+import { fmtOdds, dxqHandicapText } from '@/utils/format.js'
 
 const match = ref({})
 const selectedPlay = ref({})
@@ -227,7 +228,7 @@ const handicapText = (n, subName) => {
     if (Math.abs(v - k) < 0.001) { text = t; break }
   }
   if (!text) text = String(v)
-  if (subName === '大小球') return text
+  if (subName === '大小球') return dxqHandicapText(v)
   if (n === 0) return '平手'
   return n < 0 ? ('让' + text) : ('受让' + text)
 }
@@ -248,7 +249,7 @@ const selectedDisplayName = computed(() => {
 const selectedOddsText = computed(() => {
   const p = selectedPlay.value
   if (!p._id) return ''
-  return p.water || String(p.odds)
+  return fmtOdds(p.water || p.odds)
 })
 
 const getGridColumns = (count) => {

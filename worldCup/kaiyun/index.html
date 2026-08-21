@@ -2,6 +2,8 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
+    <!-- 图片防盗链: 携带本站Referer会被vipc图片CDN拒绝(403), 全局不发送Referer -->
+    <meta name="referrer" content="no-referrer" />
     <script>
       var coverSupport = 'CSS' in window && typeof CSS.supports === 'function' && (CSS.supports('top: env(a)') ||
         CSS.supports('top: constant(a)'))

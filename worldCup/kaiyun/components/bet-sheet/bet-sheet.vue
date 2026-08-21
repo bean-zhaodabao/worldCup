@@ -129,6 +129,7 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
+import { fmtOdds, dxqHandicapText } from '@/utils/format.js'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -195,11 +196,10 @@ function playDisplayName(p) {
   return name
 }
 
-/** 赔率显示: 有水位显示水位, 否则十进制 */
+/** 赔率显示: 有水位显示水位, 否则十进制, 统一2位小数 */
 function playOddsText(p) {
-  if (p.water) return p.water
-  const odds = p.odds || 0
-  return String(odds)
+  if (p.water) return fmtOdds(p.water)
+  return fmtOdds(p.odds || 0)
 }
 
 /** 盘口数值 -> 中文文案 */
@@ -218,7 +218,7 @@ function handicapText(n, sourceKey) {
     if (Math.abs(v - k) < 0.001) { text = t; break }
   }
   if (!text) text = String(v)
-  if (isDxq) return text // 大小球: 直接显示盘口
+  if (isDxq) return dxqHandicapText(v) // 大小球: 数字样式盘口(2.5/2.5-3)
   if (n === 0) return '平手'
   return n < 0 ? ('让' + text) : ('受让' + text)
 }

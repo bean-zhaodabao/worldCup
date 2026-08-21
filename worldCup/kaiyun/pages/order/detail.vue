@@ -41,14 +41,14 @@
             {{ item.teamA ? (item.teamA + ' VS ' + item.teamB) : item.matchName }}
           </text>
         </view>
-        <text class="play-odds">赔率: {{ item.oddsSnapshot }}</text>
+        <text class="play-odds">赔率: {{ fmtOdds(item.oddsSnapshot) }}</text>
       </view>
     </view>
 
     <!-- 金额 -->
     <view class="section">
       <view class="info-row"><text>下注金额</text><text class="amount">¥ {{ order.betAmount }}</text></view>
-      <view class="info-row"><text>总赔率</text><text>{{ order.totalOdds }}</text></view>
+      <view class="info-row"><text>总赔率</text><text>{{ fmtOdds(order.totalOdds) }}</text></view>
       <view class="info-row">
         <text>可赢额</text><text class="amount winnable">¥ {{ (order.betAmount * order.totalOdds - order.betAmount).toFixed(2) }}</text>
       </view>
@@ -62,6 +62,7 @@
 <script setup>
 import { ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
+import { fmtOdds } from '@/utils/format.js'
 
 const order = ref({ items: [] })
 const statusMap = { pending: '待开奖', won: '已中奖', lost: '未中奖', settled: '已结算' }

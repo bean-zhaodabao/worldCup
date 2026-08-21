@@ -36,7 +36,7 @@
         <view class="spf-row" v-if="spfOf(match).length">
           <view class="spf-item" v-for="p in spfOf(match)" :key="p._id">
             <text class="spf-name">{{ p.name }}</text>
-            <text class="spf-odds">{{ p.odds }}</text>
+            <text class="spf-odds">{{ fmtOdds(p.odds) }}</text>
           </view>
           <view class="spf-more" @click.stop="goDetail(match)">更多玩法 ›</view>
         </view>
@@ -79,6 +79,7 @@ import { onShow, onHide } from '@dcloudio/uni-app'
 import BetSheet from '@/components/bet-sheet/bet-sheet.vue'
 import { betCart } from '@/stores/betCart.js'
 import { startPolling, stopPolling } from '@/utils/oddsPoller.js'
+import { fmtOdds } from '@/utils/format.js'
 
 const matchList = ref([])
 const matchVersions = ref({})

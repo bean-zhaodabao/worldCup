@@ -40,11 +40,17 @@
         <el-table-column label="联赛" width="110">
           <template #default="{row}">{{ row.leagueName || '-' }}</template>
         </el-table-column>
-        <el-table-column label="对阵" min-width="180">
+        <el-table-column label="对阵" min-width="220">
           <template #default="{row}">
-            <span>{{ row.teamA }}</span>
+            <span class="team-cell">
+              <img v-if="row.teamAFlag" :src="row.teamAFlag" class="team-flag" alt="" referrerpolicy="no-referrer" />
+              <span>{{ row.teamA }}</span>
+            </span>
             <span style="color:#d32f2f;margin:0 6px">vs</span>
-            <span>{{ row.teamB }}</span>
+            <span class="team-cell">
+              <img v-if="row.teamBFlag" :src="row.teamBFlag" class="team-flag" alt="" referrerpolicy="no-referrer" />
+              <span>{{ row.teamB }}</span>
+            </span>
           </template>
         </el-table-column>
         <el-table-column label="比分" width="90">
@@ -67,12 +73,12 @@
         <el-table-column label="数据更新时间" width="150">
           <template #default="{row}">{{ fmt(row.syncedAt) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="180" fixed="right">
+        <el-table-column label="操作" width="240" fixed="right">
           <template #default="{row}">
             <el-button size="small" @click="$router.push('/match/'+row._id+'/plays')">玩法</el-button>
-            <el-button size="small" type="warning" v-if="['upcoming','live','finished'].includes(row.status) && row.sourceMatchId" @click="advanceStatus(row)">手动推进</el-button>
+            <el-button size="small" type="warning" style="margin-left:4px" v-if="['upcoming','live','finished'].includes(row.status) && row.sourceMatchId" @click="advanceStatus(row)">手动推进</el-button>
             <el-popconfirm title="确定删除？已有订单的赛事将下架处理" @confirm="doDelete(row)">
-              <template #reference><el-button size="small" type="danger">删除</el-button></template>
+              <template #reference><el-button size="small" type="danger" style="margin-left:4px">删除</el-button></template>
             </el-popconfirm>
           </template>
         </el-table-column>
@@ -164,4 +170,6 @@ const fmt = (t) => t ? new Date(t).toLocaleString('zh-CN') : ''
 
 <style lang="scss" scoped>
 .match-page .page-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; h2 { margin:0; } }
+.team-cell { display:inline-flex; align-items:center; gap:6px; vertical-align:middle; }
+.team-flag { width:24px; height:18px; object-fit:contain; background:#f5f5f5; border-radius:2px; }
 </style>

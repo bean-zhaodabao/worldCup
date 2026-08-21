@@ -26,7 +26,7 @@
           <view class="play-items">
             <view v-for="item in order.items" :key="item._id" class="play-line">
               <text>{{ item.playName }}</text>
-              <text class="play-odds">@{{ item.oddsSnapshot }}</text>
+              <text class="play-odds">@{{ fmtOdds(item.oddsSnapshot) }}</text>
               <text class="play-cat" v-if="item.categoryName">{{ item.categoryName }}</text>
               <text class="play-match" v-if="order.isParlay && (item.teamA || item.matchName)">
                 {{ item.teamA ? (item.teamA + ' VS ' + item.teamB) : item.matchName }}
@@ -55,6 +55,7 @@
 <script setup>
 import { ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
+import { fmtOdds } from '@/utils/format.js'
 
 const orders = ref([])
 const loading = ref(false)
