@@ -77,7 +77,6 @@
           >
             <text class="play-name">{{ play.name }}</text>
             <text class="play-odds">{{ fmtOdds(play.odds) }}</text>
-            <text class="play-single-badge" v-if="!canSingle(play)">仅串关</text>
           </view>
         </view>
       </view>
@@ -188,16 +187,6 @@ const formatTime = (t) => {
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0')
 }
 
-/** 是否允许单关(竞彩规则) */
-const canSingle = (play) => {
-  const key = play.sourceKey || ''
-  if (key.indexOf('spf:') === 0) {
-    return (match.value.description || '').indexOf('单关') >= 0
-  }
-  if (key.indexOf('rqspf:') === 0) return false
-  return true
-}
-
 /** 小类标题 */
 const subTitle = (sub) => sub.name
 
@@ -270,18 +259,9 @@ const selectPlay = (play) => {
   }
 }
 
-/** 单关下注(带单关限制) */
+/** 单关下注 */
 const singleBet = () => {
   if (!selectedPlay.value._id) return
-  if (!canSingle(selectedPlay.value)) {
-    const key = selectedPlay.value.sourceKey || ''
-    if (key.indexOf('rqspf:') === 0) {
-      uni.showToast({ title: '让球胜平负不支持单关，请加入串关', icon: 'none' })
-    } else {
-      uni.showToast({ title: '该场次未开放单关，请加入串关', icon: 'none' })
-    }
-    return
-  }
   showSingleSheet.value = true
 }
 
@@ -525,11 +505,6 @@ onUnload(() => {
     text-align: center; border: 2rpx solid transparent;
     .play-name { display: block; font-size: 26rpx; color: #333; }
     .play-odds { display: block; font-size: 32rpx; color: #d32f2f; font-weight: bold; margin-top: 8rpx; }
-    .play-single-badge {
-      position: absolute; top: 6rpx; right: 6rpx;
-      font-size: 18rpx; color: #999; background: #eee;
-      padding: 2rpx 8rpx; border-radius: 8rpx;
-    }
     &.selected { border-color: #1a237e; background: #e8eaf6; }
   }
 }

@@ -2,7 +2,7 @@
 // @url /user/orders
 // 下单规则(2026-08-20 客户确认):
 //  - 提交时跟随系统实时赔率(服务端下单时重读最新赔率, 不用客户端传来的赔率)
-//  - 单关限制: 胜平负仅"单关"标志场次可单关; 让球胜平负不可单关; 比分/总进球/半全场/让球盘/大小球可单关
+//  - 单关: 全部玩法(胜平负/让球胜平负/比分/总进球/半全场/让球盘/大小球)均可单关
 //  - 串关: 2~8场, 同场只能选1个玩法, 不同玩法类型可混合, 赔率相乘
 //  - 停售(stop)/下架/已开赛/未上架/数据过期(>10分钟未同步) → 拒绝
 //  - 散户: 校验余额并扣款(余额不足拒绝); 收单账户: 不校验余额, 流水照记(可为负数)
@@ -15,17 +15,6 @@ const MAX_PARLAY = 8
 const STALE_MS = 10 * 60 * 1000
 
 function round2(n) { return Math.round(n * 100) / 100 }
-
-/** 是否允许单关 */
-function canSingleBet(play, match) {
-  const key = play.sourceKey || ''
-  if (key.indexOf('spf:') === 0) {
-    // 胜平负: 仅竞彩"单关"标志场次
-    return (match.description || '').indexOf('单关') >= 0
-  }
-  if (key.indexOf('rqspf:') === 0) return false // 让球胜平负官方无单关
-  return true // 比分/总进球/半全场/让球盘/大小球 可单关
-}
 
 async function writeWalletLog(entry) {
   await db.collection('wallet-logs').add(Object.assign({ createTime: new Date() }, entry))
@@ -146,16 +135,6 @@ exports.main = async (event, context) => {
       if (match.displayState && match.displayState !== '未开始') return fail('赛事状态异常(' + match.displayState + ')，不可下注')
       // 数据过期保护(同步超过10分钟未更新则暂停投注)
       if (match.syncedAt && (now.getTime() - new Date(match.syncedAt).getTime()) > STALE_MS) return fail('赛事数据暂未更新，请稍后再试')
-    }
-
-    // 单关限制
-    if (!isParlay) {
-      const play = orderedPlays[0]
-      const match = matchMap[play.matchId]
-      if (!canSingleBet(play, match)) {
-        if ((play.sourceKey || '').indexOf('rqspf:') === 0) return fail('让球胜平负不支持单关，请加入串关投注')
-        return fail('该场次「' + play.name + '」未开放单关，请加入串关投注')
-      }
     }
 
     // 下注限额(仅散户)
