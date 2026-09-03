@@ -27,7 +27,8 @@ export default defineConfig({
     open: true,
     proxy: {
       '/api': {
-        target: 'http://worldcup.fumaokitchen.com',
+        // target: 'http://worldcup.fumaokitchen.com',
+        target: 'https://env-00jy6sztxfno.dev-hz.cloudbasefunction.cn',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, '')
       }
