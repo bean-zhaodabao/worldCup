@@ -50,6 +50,8 @@
     <!-- 空状态 -->
     <view class="empty" v-if="matchList.length === 0 && loaded">
       <text>暂无赛事</text>
+      <text class="empty-sub" v-if="serverSyncTimeText">数据更新于 {{ serverSyncTimeText }}</text>
+      <text class="empty-sub" v-if="syncStale">数据已较长时间未更新，可能是同步异常</text>
       <text class="empty-sub">如有疑问请联系管理员</text>
     </view>
 
@@ -147,6 +149,14 @@ const syncTimeText = computed(() => {
   return formatTime(latest)
 })
 
+/** 服务端同步时间(来自 sync-status, 列表为空时也能显示, 用于区分"没赛事"和"同步停摆") */
+const serverSyncAt = ref(null)
+const serverSyncTimeText = computed(() => serverSyncAt.value ? formatTime(new Date(serverSyncAt.value).getTime()) : '')
+const syncStale = computed(() => {
+  if (!serverSyncAt.value) return false
+  return Date.now() - new Date(serverSyncAt.value).getTime() > 30 * 60 * 1000
+})
+
 /** 取胜平负小类玩法(胜/平/负) */
 const spfOf = (match) => {
   const big = (match.categoryPlays || []).find(c => c.name === '胜平负')
@@ -204,6 +214,7 @@ const loadMatches = async () => {
     })
     if (res.result && res.result.code === 0) {
       matchList.value = res.result.data.matches || []
+      serverSyncAt.value = res.result.data.lastSyncAt || null
       loaded.value = true
       const versions = {}
       for (const m of matchList.value) {

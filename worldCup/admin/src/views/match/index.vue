@@ -2,12 +2,25 @@
   <div class="match-page">
     <div class="page-header">
       <h2>赛事管理</h2>
-      <div>
+      <div class="header-right">
+        <span v-if="syncStatusLoaded && !syncStale" class="sync-ok">定时同步正常 · 上次 {{ agoText }}</span>
         <el-button type="success" icon="Refresh" :loading="syncing" @click="doSync">立即同步</el-button>
         <el-button type="primary" :disabled="!selectedIds.length" @click="batchOnline(true)">批量上架</el-button>
         <el-button type="danger" :disabled="!selectedIds.length" @click="batchOnline(false)">批量下架</el-button>
       </div>
     </div>
+
+    <!-- 定时同步停摆告警: sync-jczq 每 5 分钟写一次 sync-status, 超过 15 分钟没更新说明触发器没在跑 -->
+    <el-alert v-if="syncStale" type="error" :closable="false" show-icon style="margin-bottom:16px">
+      <template #title>
+        定时同步已停摆{{ syncStatus && lastSyncAt ? '：上次同步 ' + fmt(lastSyncAt) + '（' + agoText + '）' : '：暂无同步记录' }}
+        <span v-if="syncStatus && syncStatus.error">，最近一次失败：{{ syncStatus.error }}</span>
+      </template>
+      <template #default>
+        移动端只会展示「未开赛」赛事，同步停摆会导致手机端显示"暂无赛事"。请到 uniCloud 控制台检查
+        <b>sync-jczq</b> 的定时触发器是否仍为 <code>0 */5 * * * * *</code>（换服务空间后需重新注册）。
+      </template>
+    </el-alert>
 
     <el-card style="margin-bottom:16px">
       <el-form :inline="true" :model="qf">
@@ -17,6 +30,7 @@
             <el-option label="未开始" value="upcoming" /><el-option label="进行中" value="live" />
             <el-option label="已结束" value="finished" /><el-option label="已结算" value="settled" />
             <el-option label="已取消" value="cancelled" />
+            <el-option label="已过期" value="expired" />
           </el-select>
         </el-form-item>
         <el-form-item label="上架">
@@ -89,16 +103,44 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getMatchList, deleteMatch, updateMatchStatus, syncMatches, updateMatchOnline, batchOnlineMatches } from '@/api'
+import { getMatchList, deleteMatch, updateMatchStatus, syncMatches, updateMatchOnline, batchOnlineMatches, getSyncStatus } from '@/api'
 
 const loading = ref(false), syncing = ref(false)
 const list = ref([]), page = ref(1), ps = ref(20), total = ref(0)
 const selectedIds = ref([])
 const qf = reactive({ name: '', status: '', online: '' })
 
-const onSelectionChange = (rows) => { selectedIds.value = rows.map(r => r._id) }
+// ---- 同步健康状态(定时器停摆告警) ----
+const SYNC_INTERVAL_MS = 5 * 60 * 1000   // sync-jczq 的触发周期
+const SYNC_STALE_MS = 15 * 60 * 1000     // 超过 3 个周期没更新即认为停摆
+const syncStatus = ref(null)
+const syncStatusLoaded = ref(false)
+const nowTs = ref(Date.now())
+const lastSyncAt = computed(() => {
+  const s = syncStatus.value
+  return s ? (s.lastSuccessAt || s.lastRunAt || null) : null
+})
+const syncStale = computed(() => {
+  if (!syncStatusLoaded.value) return false // 未加载完不报错, 避免首屏闪红
+  if (!lastSyncAt.value) return true
+  return nowTs.value - new Date(lastSyncAt.value).getTime() > SYNC_STALE_MS
+})
+const agoText = computed(() => {
+  if (!lastSyncAt.value) return ''
+  const min = Math.floor((nowTs.value - new Date(lastSyncAt.value).getTime()) / 60000)
+  if (min < 1) return '刚刚'
+  if (min < 60) return min + ' 分钟前'
+  const h = Math.floor(min / 60)
+  if (h < 24) return h + ' 小时前'
+  return Math.floor(h / 24) + ' 天前'
+})
+
+const loadSyncStatus = async () => {
+  try { syncStatus.value = (await getSyncStatus()).data || null } catch (e) { console.error(e) }
+  syncStatusLoaded.value = true
+}
 
 const loadList = async () => {
   loading.value = true
@@ -108,7 +150,17 @@ const loadList = async () => {
   } catch (e) { console.error(e) }
   loading.value = false
 }
-loadList()
+
+// 每分钟刷新一次"多久之前", 每 5 分钟重新拉一次同步状态
+let tickTimer = null
+onMounted(() => {
+  loadSyncStatus(); loadList()
+  tickTimer = setInterval(() => {
+    nowTs.value = Date.now()
+    if (Math.floor(Date.now() / 60000) % 5 === 0) loadSyncStatus()
+  }, 60000)
+})
+onUnmounted(() => clearInterval(tickTimer))
 
 const doSync = async () => {
   syncing.value = true
@@ -124,7 +176,7 @@ const doSync = async () => {
     } else {
       ElMessage.success(msg)
     }
-    loadList()
+    loadList(); loadSyncStatus()
   } catch (e) { ElMessage.error(e.message || '同步失败') }
   syncing.value = false
 }
@@ -163,13 +215,15 @@ const advanceStatus = async (row) => {
   } catch (e) { if (e !== 'cancel') ElMessage.error(e.message || '操作失败') }
 }
 
-const statusText = (s) => ({ upcoming: '未开始', live: '进行中', finished: '已结束', settled: '已结算', cancelled: '已取消' }[s])
-const tagType = (s) => ({ upcoming: 'info', live: 'success', finished: 'warning', settled: 'info', cancelled: 'danger' }[s])
+const statusText = (s) => ({ upcoming: '未开始', live: '进行中', finished: '已结束', settled: '已结算', cancelled: '已取消', expired: '已过期' }[s])
+const tagType = (s) => ({ upcoming: 'info', live: 'success', finished: 'warning', settled: 'info', cancelled: 'danger', expired: 'danger' }[s])
 const fmt = (t) => t ? new Date(t).toLocaleString('zh-CN') : ''
 </script>
 
 <style lang="scss" scoped>
 .match-page .page-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; h2 { margin:0; } }
+.match-page .header-right { display:flex; align-items:center; gap:8px; }
+.sync-ok { font-size:13px; color:#909399; margin-right:4px; }
 .team-cell { display:inline-flex; align-items:center; gap:6px; vertical-align:middle; }
 .team-flag { width:24px; height:18px; object-fit:contain; background:#f5f5f5; border-radius:2px; }
 </style>

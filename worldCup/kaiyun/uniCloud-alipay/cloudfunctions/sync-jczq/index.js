@@ -34,6 +34,7 @@ const BASE = 'https://www.vipc.cn'
 const PANKOU_COMPANIES = [8, 12, 14]
 const ODDS_SYNC_CONCURRENCY = 10
 const STALE_MS = 10 * 60 * 1000 // 数据超过10分钟未更新则移动端暂停投注
+const ZOMBIE_GRACE_MS = 6 * 60 * 60 * 1000 // 开赛后 6 小时仍停留在"未开始"的赛事视为僵尸场次
 
 // ==================== HTTP 工具 ====================
 
@@ -438,6 +439,7 @@ async function doSync() {
   const stats = {
     matchesAdded: 0, matchesUpdated: 0, playsAdded: 0, playsUpdated: 0,
     oddsChangedMatches: 0, settledOrders: 0, refunded: 0, pendingPlays: 0,
+    expiredMatches: 0,
     errors: []
   }
   const oddsChangedMatchIds = new Set()
@@ -547,6 +549,37 @@ async function doSync() {
       settledMatchIds.add(m._id)
     } catch (e) {
       stats.errors.push('结算失败 ' + m._id + ': ' + e.message)
+    }
+  }
+
+  // 7. 清理僵尸赛事: 开赛时间已过很久仍停留在 upcoming 的场次
+  //    列表接口只拉 today/next 窗口, 赛事滑出窗口后不会再被更新, 否则会永久显示"未开始"
+  //    注意: 必须标成 expired 而不是 finished —— 这些场次没有比分, regularScore 会把
+  //    undefined 当 0:0, 标 finished 会被自动结算引擎按假比分结算所有订单
+  const zombieRes = await db.collection('matches')
+    .where({ status: 'upcoming', deleted: cmd.neq(true), startTime: cmd.lt(new Date(Date.now() - ZOMBIE_GRACE_MS)) })
+    .limit(200)
+    .get()
+  for (const m of zombieRes.data || []) {
+    try {
+      // 串关存 matchIds 数组, 单关历史上存过 matchId, 两个都查
+      const byArr = await db.collection('orders').where({ matchIds: cmd.in([m._id]) }).count()
+      const bySingle = await db.collection('orders').where({ matchId: m._id }).count()
+      const orderCount = byArr.total + bySingle.total
+      await db.collection('matches').doc(m._id).update({ status: 'expired', updateTime: new Date() })
+      stats.expiredMatches++
+      if (orderCount > 0) {
+        // 有过期场次仍挂着订单 -> 需要人工核对比分后处理, 单独告警
+        stats.errors.push('赛事已过期但存在 ' + orderCount + ' 笔订单, 需人工处理: ' + (m.teamA || '') + ' vs ' + (m.teamB || '') + ' (' + m._id + ')')
+        await db.collection('operation-logs').add({
+          adminId: 'system', adminName: 'system',
+          action: 'match_expired', targetType: 'matches', targetId: m._id,
+          detail: '赛事已过期(未同步到赛果)且存在 ' + orderCount + ' 笔订单, 待人工核对: ' + (m.teamA || '') + ' vs ' + (m.teamB || ''),
+          createTime: new Date()
+        })
+      }
+    } catch (e) {
+      stats.errors.push('过期赛事处理失败 ' + m._id + ': ' + e.message)
     }
   }
 

@@ -14,6 +14,17 @@ exports.main = async (event, context) => {
   const path = event.path || ''
 
   try {
+    // GET /sync-status - 同步健康状态(管理端顶部"上次同步时间"告警用)
+    // sync-jczq 每轮都会写 sync-status/main, 超过 15 分钟未更新即说明定时器没在跑
+    if (method === 'GET' && path.includes('/sync-status')) {
+      try {
+        const res = await db.collection('sync-status').doc('main').get()
+        return ok((res.data && res.data[0]) || null)
+      } catch (e) {
+        return ok(null) // 首次运行尚无该文档
+      }
+    }
+
     // GET - 查询赛事列表
     if (method === 'GET') {
       const { name, status, page = 1, pageSize = 20 } = query

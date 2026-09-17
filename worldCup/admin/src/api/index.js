@@ -24,6 +24,10 @@ export function updateMatchStatus(id, status) {
 export function syncMatches() {
   return request.post('/admin-match/sync')
 }
+// 同步健康状态（上次同步时间/错误），用于「同步停摆」告警
+export function getSyncStatus() {
+  return request.get('/admin-match/sync-status')
+}
 export function updateMatchOnline(id, online) {
   return request.patch('/admin-match/' + id + '/online', { online })
 }

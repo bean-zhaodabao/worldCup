@@ -27,7 +27,16 @@ exports.main = async (event, context) => {
       .get()
 
     const matches = matchesRes.data || []
-    if (matches.length === 0) return success({ matches: [] })
+
+    // 同步健康时间: 让移动端在列表为空时能区分"真的没赛事"和"数据同步停摆"
+    let lastSyncAt = null
+    try {
+      const ss = await db.collection('sync-status').doc('main').get()
+      const doc = ss.data && ss.data[0]
+      if (doc) lastSyncAt = doc.lastSuccessAt || doc.lastRunAt || null
+    } catch (e) { /* 首次运行无该文档 */ }
+
+    if (matches.length === 0) return success({ matches: [], lastSyncAt })
 
     // 2. 一次取出所有玩法与分类, 避免逐场查询
     //    玩法总量可能超过单次 get 上限(阿里云默认100/最大1000), 分页取全
@@ -136,7 +145,7 @@ exports.main = async (event, context) => {
       })
     }
 
-    return success({ matches: result })
+    return success({ matches: result, lastSyncAt })
   } catch (e) {
     console.error('user-match error:', e)
     return fail(e.message || '服务器错误')
