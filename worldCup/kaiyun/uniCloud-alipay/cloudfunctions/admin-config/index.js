@@ -6,7 +6,8 @@ const { ok, err, verifyToken } = require('./utils')
 // 默认配置
 const DEFAULT_CONFIG = {
   minBet: { value: '2.00', description: '单注最低金额' },
-  maxBet: { value: '100000.00', description: '单注最高金额' }
+  maxBet: { value: '100000.00', description: '单注最高金额' },
+  matchDays: { value: '2', description: '移动端赛事展示天数(含今天, 默认2)' }
 }
 
 exports.main = async (event, context) => {

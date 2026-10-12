@@ -1,10 +1,22 @@
 'use strict'
 // @url /user/matches
-// 移动端赛事列表: 只返回已上架且未开赛的赛事(客户确认暂只展示未开赛)
+// 移动端赛事列表: 只返回"今明2天"(天数可配)内已上架且未开赛的赛事(客户确认)
+// 详情/轮询: 传 matchId 可取单场(不受展示窗口限制)
 // 每场赛事含7组玩法(胜平负/让球胜平负/比分/总进球区间/半全场/让球盘/大小球), 停售玩法过滤
 const db = uniCloud.database()
 const cmd = db.command
 const { success, fail, verifyToken } = require('./utils')
+
+// 北京时间(UTC+8)为界: 展示窗口上界 = "今天起第 days 天"的 00:00(毫秒), 用作开赛时间开区间
+// 例: days=2 时上界为后天00:00, 即"今天+明天"两天
+const CN_OFFSET_MS = 8 * 60 * 60 * 1000
+const endOfWindow = (nowMs, days) => {
+  const cn = new Date(nowMs + CN_OFFSET_MS)
+  return new Date(Date.UTC(cn.getUTCFullYear(), cn.getUTCMonth(), cn.getUTCDate() + days) - CN_OFFSET_MS)
+}
+// 展示天数默认2(含今天和明天); 上限10, 防止误配置成超大窗口
+const DEFAULT_MATCH_DAYS = 2
+const MAX_MATCH_DAYS = 10
 
 exports.main = async (event, context) => {
   const token = event.token || (event.headers && (event.headers.authorization || event.headers.Authorization || '')).replace('Bearer ', '')
@@ -12,19 +24,39 @@ exports.main = async (event, context) => {
   if (!user) return fail('未登录或登录已过期', 401)
 
   try {
-    const now = new Date()
+    // 0. 读取移动端赛事展示天数(后台 system-config.matchDays, 默认2天)
+    let matchDays = DEFAULT_MATCH_DAYS
+    try {
+      const cfg = await db.collection('system-config').where({ key: 'matchDays' }).get()
+      const v = parseInt(cfg.data && cfg.data[0] && cfg.data[0].value, 10)
+      if (v >= 1) matchDays = Math.min(v, MAX_MATCH_DAYS)
+    } catch (e) { /* 无配置或查询失败时用默认值 */ }
 
-    // 1. 已上架、未开赛、未删除、未到开赛时间的赛事, 按开赛时间升序
-    const matchesRes = await db.collection('matches')
-      .where({
-        online: cmd.neq(false),
-        deleted: cmd.neq(true),
-        status: 'upcoming',
-        startTime: cmd.gt(now)
-      })
-      .orderBy('startTime', 'asc')
-      .limit(200)
-      .get()
+    const reqMatchId = event.matchId ? String(event.matchId) : ''
+
+    // 1. 查赛事
+    //   - 列表(matchId 为空): 已上架、未开赛、未删除、开赛时间在(当前, 展示窗口上界)之间, 按开赛时间升序
+    //   - 详情/轮询(matchId 有值): 按 id 取单场, 不看展示窗口, 保证已打开页面跨天/跨窗口后仍可用
+    let matchesRes
+    if (reqMatchId) {
+      matchesRes = await db.collection('matches')
+        .where({ _id: reqMatchId, online: cmd.neq(false), deleted: cmd.neq(true) })
+        .limit(1)
+        .get()
+    } else {
+      const now = new Date()
+      const deadline = endOfWindow(now.getTime(), matchDays)
+      matchesRes = await db.collection('matches')
+        .where({
+          online: cmd.neq(false),
+          deleted: cmd.neq(true),
+          status: 'upcoming',
+          startTime: cmd.gt(now).and(cmd.lt(deadline))
+        })
+        .orderBy('startTime', 'asc')
+        .limit(200)
+        .get()
+    }
 
     const matches = matchesRes.data || []
 

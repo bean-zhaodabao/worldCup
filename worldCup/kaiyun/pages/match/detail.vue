@@ -84,7 +84,8 @@
 
     <!-- 空状态 -->
     <view class="empty" v-if="categoryPlays.length === 0 && loaded">
-      <text>该赛事暂无玩法</text>
+      <text v-if="matchMissing">赛事不存在或已下架</text>
+      <text v-else>该赛事暂无玩法</text>
     </view>
 
     <!-- 串关提示条 -->
@@ -167,6 +168,7 @@ const showSingleSheet = ref(false)
 const showCartSheet = ref(false)
 const categoryPlays = ref([])
 const loaded = ref(false)
+const matchMissing = ref(false)
 const currentOddsVersion = ref(0)
 const activeTab = ref('all')
 
@@ -366,35 +368,40 @@ const fetchMatchData = async (matchId) => {
   try {
     const res = await uniCloud.callFunction({
       name: 'user-match',
-      data: { token: uni.getStorageSync('token') }
+      data: { token: uni.getStorageSync('token'), matchId }
     })
     if (res.result && res.result.code === 0) {
-      const matchData = (res.result.data.matches || []).find(m => m._id === matchId)
-      if (matchData) {
-        const oldOddsMap = {}
-        for (const cat of categoryPlays.value) {
-          for (const sub of cat.subCategories || []) {
-            for (const p of sub.plays || []) oldOddsMap[p._id] = p.odds
-          }
+      const list = res.result.data.matches || []
+      const matchData = list.find(m => m._id === matchId)
+      if (!matchData) {
+        // 赛事被删除/下架或不存在
+        matchMissing.value = true
+        return
+      }
+      matchMissing.value = false
+      const oldOddsMap = {}
+      for (const cat of categoryPlays.value) {
+        for (const sub of cat.subCategories || []) {
+          for (const p of sub.plays || []) oldOddsMap[p._id] = p.odds
         }
-        match.value = matchData
-        categoryPlays.value = matchData.categoryPlays || []
-        currentOddsVersion.value = matchData.oddsVersion || 0
+      }
+      match.value = matchData
+      categoryPlays.value = matchData.categoryPlays || []
+      currentOddsVersion.value = matchData.oddsVersion || 0
 
-        if (selectedPlay.value._id) {
-          const found = findAllPlays(matchData).find(p => p._id === selectedPlay.value._id)
-          if (found) selectedPlay.value = { ...found }
-        }
+      if (selectedPlay.value._id) {
+        const found = findAllPlays(matchData).find(p => p._id === selectedPlay.value._id)
+        if (found) selectedPlay.value = { ...found }
+      }
 
-        let cartChanged = false
-        for (const p of findAllPlays(matchData)) {
-          if (oldOddsMap[p._id] !== undefined && oldOddsMap[p._id] !== p.odds) {
-            if (betCart.updateOdds(p._id, p.odds, p.water)) cartChanged = true
-          }
+      let cartChanged = false
+      for (const p of findAllPlays(matchData)) {
+        if (oldOddsMap[p._id] !== undefined && oldOddsMap[p._id] !== p.odds) {
+          if (betCart.updateOdds(p._id, p.odds, p.water)) cartChanged = true
         }
-        if (cartChanged) {
-          uni.showToast({ title: '购物车赔率已更新', icon: 'none', duration: 2000 })
-        }
+      }
+      if (cartChanged) {
+        uni.showToast({ title: '购物车赔率已更新', icon: 'none', duration: 2000 })
       }
     }
   } catch (e) {

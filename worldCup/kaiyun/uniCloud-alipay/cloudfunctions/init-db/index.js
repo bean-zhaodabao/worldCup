@@ -32,12 +32,12 @@ exports.main = async (event, context) => {
   }
 
   // 2. 初始化系统配置
-  const configKeys = ['minBet', 'maxBet']
+  const configKeys = ['minBet', 'maxBet', 'matchDays']
   for (const key of configKeys) {
     const existCfg = await db.collection('system-config').where({ key }).count()
     if (existCfg.total === 0) {
-      const defaults = { minBet: '2.00', maxBet: '100000.00' }
-      const descs = { minBet: '单注最低金额', maxBet: '单注最高金额' }
+      const defaults = { minBet: '2.00', maxBet: '100000.00', matchDays: '2' }
+      const descs = { minBet: '单注最低金额', maxBet: '单注最高金额', matchDays: '移动端赛事展示天数(含今天, 默认2)' }
       await db.collection('system-config').add({
         key, value: defaults[key], description: descs[key], updateTime: new Date()
       })
