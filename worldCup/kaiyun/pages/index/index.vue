@@ -68,6 +68,7 @@
       :matchInfo="{}"
       :selectedPlays="cartItems"
       :isParlay="true"
+      :loading="cartSubmitting"
       @confirm="handleCartConfirm"
       @cancel="showCartSheet = false"
       @removePlay="onCartRemovePlay"
@@ -88,6 +89,7 @@ const matchVersions = ref({})
 const loading = ref(false)
 const loaded = ref(false)
 const showCartSheet = ref(false)
+const cartSubmitting = ref(false)
 
 const cartCount = computed(() => betCart.count)
 const cartTotalOdds = computed(() => betCart.totalOdds)
@@ -174,7 +176,8 @@ const onCartRemovePlay = ({ playId }) => {
 }
 
 const handleCartConfirm = async (betData) => {
-  showCartSheet.value = false
+  if (cartSubmitting.value) return
+  cartSubmitting.value = true
   try {
     const res = await uniCloud.callFunction({
       name: 'user-order',
@@ -187,6 +190,7 @@ const handleCartConfirm = async (betData) => {
     })
     const result = res.result
     if (result && result.code === 0) {
+      showCartSheet.value = false
       // 以服务端实时赔率为准展示
       uni.showToast({
         title: '串关下单成功！可赢 ¥' + result.data.winAmount.toFixed(2),
@@ -199,6 +203,8 @@ const handleCartConfirm = async (betData) => {
   } catch (e) {
     console.error('串关下单失败:', e)
     uni.showToast({ title: '网络错误，请重试', icon: 'error' })
+  } finally {
+    cartSubmitting.value = false
   }
 }
 

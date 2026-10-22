@@ -1,6 +1,6 @@
 <template>
   <view class="bet-sheet-mask" v-if="visible" @click="handleMaskClose">
-    <view class="bet-sheet" :class="{ 'sheet-open': visible }" @click.stop>
+    <view class="bet-sheet" :class="{ 'sheet-open': visible, 'sheet-loading': isLoading }" @click.stop>
       <!-- 拖动条 -->
       <view class="sheet-handle"><view class="handle-bar"></view></view>
 
@@ -106,21 +106,35 @@
       <view class="slide-submit-wrapper">
         <view
           class="slide-track"
+          :class="{ 'slide-loading': isLoading, 'slide-disabled': !canSubmit }"
           ref="slideTrack"
           @touchstart="onSlideStart"
           @touchmove="onSlideMove"
           @touchend="onSlideEnd"
+          @touchcancel="onSlideEnd"
         >
-          <view class="slide-bg-text">
+          <view v-if="!isLoading" class="slide-bg-text">
             {{ slideText }}
           </view>
+          <view v-else class="slide-loading-text">
+            <view class="slide-spinner"></view>
+            <text>正在提交，请稍候…</text>
+          </view>
           <view
+            v-if="!isLoading"
             class="slide-thumb"
             :style="{ left: slideLeft + 'px' }"
           >
             <text class="slide-arrow">→</text>
           </view>
-          <view class="slide-progress" :style="{ width: slideProgress + '%' }"></view>
+          <view
+            v-else
+            class="slide-thumb slide-thumb-loading"
+            :style="{ left: slideMaxWidth + 'px' }"
+          >
+            <view class="slide-spinner slide-spinner-dark"></view>
+          </view>
+          <view class="slide-progress" :style="{ width: (isLoading ? 100 : slideProgress) + '%' }"></view>
         </view>
       </view>
     </view>
@@ -138,6 +152,8 @@ const props = defineProps({
   selectedPlays: { type: Array, default: () => [] },
   // 串关模式标记
   isParlay: { type: Boolean, default: false },
+  // 提交中（由父组件在请求下单接口期间置为 true）
+  loading: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['confirm', 'cancel', 'removePlay'])
@@ -334,12 +350,21 @@ const removePlay = (index) => {
 const slideLeft = ref(0)
 const slideProgress = ref(0)
 const slideMaxWidth = ref(300)
+const submitting = ref(false)
+const isLoading = computed(() => submitting.value || props.loading)
 let startX = 0
 let currentLeft = 0
 let trackWidth = 0
+let dragging = false
+
+const resetSlide = () => {
+  slideLeft.value = 0
+  slideProgress.value = 0
+}
 
 const onSlideStart = (e) => {
-  if (!canSubmit.value) return
+  if (isLoading.value || !canSubmit.value) return
+  dragging = true
   startX = e.touches[0].clientX
   currentLeft = slideLeft.value
 
@@ -353,24 +378,43 @@ const onSlideStart = (e) => {
 }
 
 const onSlideMove = (e) => {
-  if (!canSubmit.value) return
+  if (isLoading.value || !dragging || !canSubmit.value) return
   const deltaX = e.touches[0].clientX - startX
   const newLeft = Math.max(0, Math.min(currentLeft + deltaX, trackWidth))
   slideLeft.value = newLeft
   slideProgress.value = trackWidth > 0 ? (newLeft / trackWidth) * 100 : 0
 }
 
-const onSlideEnd = (e) => {
-  if (!canSubmit.value) return
-  if (slideProgress.value >= 85) {
-    handleSubmit()
+const onSlideEnd = () => {
+  if (!dragging) return
+  dragging = false
+  if (!canSubmit.value) {
+    resetSlide()
+    return
   }
-  slideLeft.value = 0
-  slideProgress.value = 0
+  if (slideProgress.value >= 85) {
+    // 拉到最右端并进入加载态，等待父组件完成下单
+    slideLeft.value = trackWidth
+    slideProgress.value = 100
+    submitting.value = true
+    handleSubmit()
+  } else {
+    resetSlide()
+  }
 }
 
 import { getCurrentInstance } from 'vue'
 const instance = getCurrentInstance()
+
+// 父组件请求结束（失败/取消）时退出加载态，允许重新滑动
+watch(() => props.loading, (val) => {
+  if (val) {
+    submitting.value = true
+  } else if (submitting.value) {
+    submitting.value = false
+    resetSlide()
+  }
+})
 
 // ============ 提交 ============
 const handleSubmit = () => {
@@ -382,11 +426,10 @@ const handleSubmit = () => {
     totalOdds: parseFloat(totalOdds.value),
     isParlay: playList.value.length > 1
   })
-  inputAmount.value = ''
-  multiplier.value = 1
 }
 
 const handleMaskClose = () => {
+  if (isLoading.value) return
   emit('cancel')
 }
 
@@ -394,8 +437,9 @@ watch(() => props.visible, (val) => {
   if (val) {
     inputAmount.value = ''
     multiplier.value = 1
-    slideLeft.value = 0
-    slideProgress.value = 0
+    submitting.value = false
+    dragging = false
+    resetSlide()
     // 记录打开时的赔率作为基准，后续只在此基准上检测变化
     lastOdds.value = parseFloat(totalOdds.value) || 0
   }
@@ -541,12 +585,45 @@ watch(() => props.visible, (val) => {
   display: flex;
   align-items: center;
   justify-content: center;
+
+  &.slide-disabled .slide-bg-text { color: #bbb; }
+  &.slide-loading {
+    background: #2e7d32;
+    animation: slideGlow 1.4s ease-in-out infinite;
+  }
+}
+
+@keyframes slideGlow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.35); }
+  50% { box-shadow: 0 0 0 10rpx rgba(76, 175, 80, 0.12); }
 }
 
 .slide-bg-text {
-  font-size: 26rpx; color: #999; z-index: 1;
+  font-size: 26rpx; color: #999; z-index: 4;
   white-space: nowrap; overflow: hidden;
   padding: 0 20rpx;
+}
+
+.slide-loading-text {
+  display: flex; align-items: center; justify-content: center;
+  z-index: 4; padding: 0 24rpx;
+  font-size: 26rpx; color: #fff; font-weight: bold;
+  text { margin-left: 12rpx; }
+}
+
+// 加载转圈
+.slide-spinner {
+  width: 30rpx; height: 30rpx; flex-shrink: 0;
+  border: 4rpx solid rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: slideSpin 0.7s linear infinite;
+
+  &.slide-spinner-dark { border-color: rgba(76, 175, 80, 0.25); border-top-color: #4caf50; }
+}
+
+@keyframes slideSpin {
+  to { transform: rotate(360deg); }
 }
 
 .slide-progress {
@@ -566,5 +643,15 @@ watch(() => props.visible, (val) => {
   .slide-arrow {
     font-size: 36rpx; color: #4caf50; font-weight: bold;
   }
+
+  &.slide-thumb-loading {
+    transition: left 0.2s ease-out;
+    box-shadow: 0 4rpx 16rpx rgba(0,0,0,0.25);
+  }
+}
+
+// 提交中：锁定金额区/键盘，避免重复操作
+.sheet-loading {
+  .amount-section, .custom-keypad { pointer-events: none; opacity: 0.5; }
 }
 </style>

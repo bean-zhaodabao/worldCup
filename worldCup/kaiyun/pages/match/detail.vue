@@ -137,6 +137,7 @@
       :matchInfo="match"
       :selectedPlays="selectedPlay._id ? [selectedPlay] : []"
       :isParlay="false"
+      :loading="singleSubmitting"
       @confirm="handleSingleConfirm"
       @cancel="showSingleSheet = false"
     />
@@ -147,6 +148,7 @@
       :matchInfo="{}"
       :selectedPlays="cartItems"
       :isParlay="true"
+      :loading="cartSubmitting"
       @confirm="handleCartConfirm"
       @cancel="showCartSheet = false"
       @removePlay="onCartRemovePlay"
@@ -166,6 +168,8 @@ const match = ref({})
 const selectedPlay = ref({})
 const showSingleSheet = ref(false)
 const showCartSheet = ref(false)
+const singleSubmitting = ref(false)
+const cartSubmitting = ref(false)
 const categoryPlays = ref([])
 const loaded = ref(false)
 const matchMissing = ref(false)
@@ -307,7 +311,8 @@ const removeFromCart = () => {
 }
 
 const handleSingleConfirm = async (betData) => {
-  showSingleSheet.value = false
+  if (singleSubmitting.value) return
+  singleSubmitting.value = true
   try {
     const res = await uniCloud.callFunction({
       name: 'user-order',
@@ -320,6 +325,7 @@ const handleSingleConfirm = async (betData) => {
     })
     const result = res.result
     if (result && result.code === 0) {
+      showSingleSheet.value = false
       // 以服务端实时赔率为准
       uni.showToast({
         title: '下单成功！可赢 ¥' + result.data.winAmount.toFixed(2) + (result.data.balance !== undefined ? '，余额 ¥' + result.data.balance.toFixed(2) : ''),
@@ -332,11 +338,14 @@ const handleSingleConfirm = async (betData) => {
   } catch (e) {
     console.error('下单失败:', e)
     uni.showToast({ title: '网络错误，请重试', icon: 'error' })
+  } finally {
+    singleSubmitting.value = false
   }
 }
 
 const handleCartConfirm = async (betData) => {
-  showCartSheet.value = false
+  if (cartSubmitting.value) return
+  cartSubmitting.value = true
   try {
     const res = await uniCloud.callFunction({
       name: 'user-order',
@@ -349,6 +358,7 @@ const handleCartConfirm = async (betData) => {
     })
     const result = res.result
     if (result && result.code === 0) {
+      showCartSheet.value = false
       uni.showToast({
         title: '串关下单成功！可赢 ¥' + result.data.winAmount.toFixed(2),
         icon: 'success', duration: 2000
@@ -361,6 +371,8 @@ const handleCartConfirm = async (betData) => {
   } catch (e) {
     console.error('串关下单失败:', e)
     uni.showToast({ title: '网络错误，请重试', icon: 'error' })
+  } finally {
+    cartSubmitting.value = false
   }
 }
 
