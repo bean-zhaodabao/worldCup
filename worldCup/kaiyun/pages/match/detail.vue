@@ -138,6 +138,7 @@
       :selectedPlays="selectedPlay._id ? [selectedPlay] : []"
       :isParlay="false"
       :loading="singleSubmitting"
+      :errorText="singleError"
       @confirm="handleSingleConfirm"
       @cancel="showSingleSheet = false"
     />
@@ -149,6 +150,7 @@
       :selectedPlays="cartItems"
       :isParlay="true"
       :loading="cartSubmitting"
+      :errorText="cartError"
       @confirm="handleCartConfirm"
       @cancel="showCartSheet = false"
       @removePlay="onCartRemovePlay"
@@ -170,6 +172,8 @@ const showSingleSheet = ref(false)
 const showCartSheet = ref(false)
 const singleSubmitting = ref(false)
 const cartSubmitting = ref(false)
+const singleError = ref('')
+const cartError = ref('')
 const categoryPlays = ref([])
 const loaded = ref(false)
 const matchMissing = ref(false)
@@ -268,6 +272,7 @@ const selectPlay = (play) => {
 /** 单关下注 */
 const singleBet = () => {
   if (!selectedPlay.value._id) return
+  singleError.value = ''
   showSingleSheet.value = true
 }
 
@@ -301,7 +306,10 @@ const addToCart = () => {
   }
 }
 
-const showCartBet = () => { showCartSheet.value = true }
+const showCartBet = () => {
+  cartError.value = ''
+  showCartSheet.value = true
+}
 
 const onCartRemovePlay = ({ playId }) => { betCart.remove(playId) }
 
@@ -313,6 +321,7 @@ const removeFromCart = () => {
 const handleSingleConfirm = async (betData) => {
   if (singleSubmitting.value) return
   singleSubmitting.value = true
+  singleError.value = ''
   try {
     const res = await uniCloud.callFunction({
       name: 'user-order',
@@ -329,15 +338,19 @@ const handleSingleConfirm = async (betData) => {
       // 以服务端实时赔率为准
       uni.showToast({
         title: '下单成功！可赢 ¥' + result.data.winAmount.toFixed(2) + (result.data.balance !== undefined ? '，余额 ¥' + result.data.balance.toFixed(2) : ''),
-        icon: 'success', duration: 2000
+        icon: 'none', duration: 2500
       })
       selectedPlay.value = {}
     } else {
-      uni.showToast({ title: (result && result.message) || '下单失败', icon: 'error' })
+      const msg = (result && result.message) || '下单失败，请重试'
+      singleError.value = msg
+      uni.showToast({ title: msg, icon: 'none', duration: 3000 })
     }
   } catch (e) {
     console.error('下单失败:', e)
-    uni.showToast({ title: '网络错误，请重试', icon: 'error' })
+    const msg = '网络错误，请重试'
+    singleError.value = msg
+    uni.showToast({ title: msg, icon: 'none', duration: 3000 })
   } finally {
     singleSubmitting.value = false
   }
@@ -346,6 +359,7 @@ const handleSingleConfirm = async (betData) => {
 const handleCartConfirm = async (betData) => {
   if (cartSubmitting.value) return
   cartSubmitting.value = true
+  cartError.value = ''
   try {
     const res = await uniCloud.callFunction({
       name: 'user-order',
@@ -361,16 +375,20 @@ const handleCartConfirm = async (betData) => {
       showCartSheet.value = false
       uni.showToast({
         title: '串关下单成功！可赢 ¥' + result.data.winAmount.toFixed(2),
-        icon: 'success', duration: 2000
+        icon: 'none', duration: 2500
       })
       betCart.clear()
       selectedPlay.value = {}
     } else {
-      uni.showToast({ title: (result && result.message) || '下单失败', icon: 'error' })
+      const msg = (result && result.message) || '下单失败，请重试'
+      cartError.value = msg
+      uni.showToast({ title: msg, icon: 'none', duration: 3000 })
     }
   } catch (e) {
     console.error('串关下单失败:', e)
-    uni.showToast({ title: '网络错误，请重试', icon: 'error' })
+    const msg = '网络错误，请重试'
+    cartError.value = msg
+    uni.showToast({ title: msg, icon: 'none', duration: 3000 })
   } finally {
     cartSubmitting.value = false
   }

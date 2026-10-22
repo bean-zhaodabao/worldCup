@@ -102,14 +102,20 @@
         </view>
       </view>
 
+      <!-- 下单失败原因（接口返回的 message，紧贴提交按钮持续展示，避免 toast 被弹层遮挡而看不到） -->
+      <view class="sheet-error" v-if="errorText && !isLoading">
+        <text class="sheet-error-icon">!</text>
+        <text class="sheet-error-text">{{ errorText }}</text>
+      </view>
+
       <!-- 滑动提交按钮 -->
       <view class="slide-submit-wrapper">
         <view
           class="slide-track"
           :class="{ 'slide-loading': isLoading, 'slide-disabled': !canSubmit }"
           ref="slideTrack"
-          @touchstart="onSlideStart"
-          @touchmove="onSlideMove"
+          @touchstart.stop="onSlideStart"
+          @touchmove.stop.prevent="onSlideMove"
           @touchend="onSlideEnd"
           @touchcancel="onSlideEnd"
         >
@@ -142,8 +148,9 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onUnmounted } from 'vue'
 import { fmtOdds, dxqHandicapText } from '@/utils/format.js'
+import { lockBodyScroll, unlockBodyScroll } from '@/utils/scrollLock.js'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -154,6 +161,8 @@ const props = defineProps({
   isParlay: { type: Boolean, default: false },
   // 提交中（由父组件在请求下单接口期间置为 true）
   loading: { type: Boolean, default: false },
+  // 下单失败原因（由父组件在接口返回非 0 时传入）
+  errorText: { type: String, default: '' },
 })
 
 const emit = defineEmits(['confirm', 'cancel', 'removePlay'])
@@ -433,8 +442,18 @@ const handleMaskClose = () => {
   emit('cancel')
 }
 
+// 弹层打开期间锁定背景页面滚动, 避免手指滑动时整页跟着移动
+let scrollLocked = false
+const setScrollLock = (locked) => {
+  if (locked === scrollLocked) return
+  scrollLocked = locked
+  if (locked) lockBodyScroll()
+  else unlockBodyScroll()
+}
+
 watch(() => props.visible, (val) => {
   if (val) {
+    setScrollLock(true)
     inputAmount.value = ''
     multiplier.value = 1
     submitting.value = false
@@ -442,7 +461,14 @@ watch(() => props.visible, (val) => {
     resetSlide()
     // 记录打开时的赔率作为基准，后续只在此基准上检测变化
     lastOdds.value = parseFloat(totalOdds.value) || 0
+  } else {
+    setScrollLock(false)
   }
+})
+
+onUnmounted(() => {
+  // 页面跳转/组件销毁时确保解锁, 避免页面一直不能滚动
+  setScrollLock(false)
 })
 </script>
 
@@ -451,11 +477,16 @@ watch(() => props.visible, (val) => {
   position: fixed; top: 0; left: 0; right: 0; bottom: 0;
   background: rgba(0,0,0,0.5); z-index: 1000;
   display: flex; align-items: flex-end;
+  // 阻止滚动手势穿透到背后的页面
+  overscroll-behavior: none;
 }
 
 .bet-sheet {
   width: 100%; background: #fff; border-radius: 24rpx 24rpx 0 0;
   max-height: 85vh; overflow-y: auto;
+  // 弹层内部滚动到边界时不要让背景页面接着滚(滚动链传导)
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   animation: slideUp 0.25s ease-out;
 }
 
@@ -489,6 +520,36 @@ watch(() => props.visible, (val) => {
   .realtime-hint {
     font-size: 22rpx; color: #ef6c00; background: #fff3e0;
     padding: 4rpx 14rpx; border-radius: 12rpx;
+  }
+}
+
+// 下单失败提示
+.sheet-error {
+  display: flex;
+  align-items: flex-start;
+  margin: 16rpx 30rpx 0;
+  padding: 16rpx 20rpx;
+  background: #ffebee;
+  border: 1rpx solid #ffcdd2;
+  border-radius: 12rpx;
+
+  .sheet-error-icon {
+    flex-shrink: 0;
+    width: 32rpx; height: 32rpx;
+    margin-right: 12rpx;
+    border-radius: 50%;
+    background: #d32f2f;
+    color: #fff;
+    font-size: 24rpx; font-weight: bold;
+    line-height: 32rpx; text-align: center;
+  }
+
+  .sheet-error-text {
+    flex: 1;
+    font-size: 26rpx;
+    line-height: 32rpx;
+    color: #c62828;
+    word-break: break-all;
   }
 }
 
@@ -573,7 +634,7 @@ watch(() => props.visible, (val) => {
 
 // ============ 滑动提交按钮 ============
 .slide-submit-wrapper {
-  padding: 20rpx 30rpx 40rpx;
+  padding: 20rpx 80rpx 40rpx;
 }
 
 .slide-track {
@@ -585,6 +646,8 @@ watch(() => props.visible, (val) => {
   display: flex;
   align-items: center;
   justify-content: center;
+  // 拖动滑块时禁止浏览器接管手势（避免页面跟着滚动）
+  touch-action: none;
 
   &.slide-disabled .slide-bg-text { color: #bbb; }
   &.slide-loading {

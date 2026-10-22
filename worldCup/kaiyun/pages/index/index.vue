@@ -56,7 +56,7 @@
     </view>
 
     <!-- 串关购物车浮动按钮 -->
-    <view class="floating-cart" v-if="cartCount > 0" @click="showCartSheet = true">
+    <view class="floating-cart" v-if="cartCount > 0" @click="openCartSheet">
       <text class="cart-badge-count">{{ cartCount }}</text>
       <text class="cart-label">串关单</text>
       <text class="cart-odds">赔率 {{ cartTotalOdds.toFixed(2) }}</text>
@@ -69,6 +69,7 @@
       :selectedPlays="cartItems"
       :isParlay="true"
       :loading="cartSubmitting"
+      :errorText="cartError"
       @confirm="handleCartConfirm"
       @cancel="showCartSheet = false"
       @removePlay="onCartRemovePlay"
@@ -90,6 +91,7 @@ const loading = ref(false)
 const loaded = ref(false)
 const showCartSheet = ref(false)
 const cartSubmitting = ref(false)
+const cartError = ref('')
 
 const cartCount = computed(() => betCart.count)
 const cartTotalOdds = computed(() => betCart.totalOdds)
@@ -175,9 +177,15 @@ const onCartRemovePlay = ({ playId }) => {
   betCart.remove(playId)
 }
 
+const openCartSheet = () => {
+  cartError.value = ''
+  showCartSheet.value = true
+}
+
 const handleCartConfirm = async (betData) => {
   if (cartSubmitting.value) return
   cartSubmitting.value = true
+  cartError.value = ''
   try {
     const res = await uniCloud.callFunction({
       name: 'user-order',
@@ -194,15 +202,19 @@ const handleCartConfirm = async (betData) => {
       // 以服务端实时赔率为准展示
       uni.showToast({
         title: '串关下单成功！可赢 ¥' + result.data.winAmount.toFixed(2),
-        icon: 'success', duration: 2000
+        icon: 'none', duration: 2500
       })
       betCart.clear()
     } else {
-      uni.showToast({ title: (result && result.message) || '下单失败', icon: 'error' })
+      const msg = (result && result.message) || '下单失败，请重试'
+      cartError.value = msg
+      uni.showToast({ title: msg, icon: 'none', duration: 3000 })
     }
   } catch (e) {
     console.error('串关下单失败:', e)
-    uni.showToast({ title: '网络错误，请重试', icon: 'error' })
+    const msg = '网络错误，请重试'
+    cartError.value = msg
+    uni.showToast({ title: msg, icon: 'none', duration: 3000 })
   } finally {
     cartSubmitting.value = false
   }
