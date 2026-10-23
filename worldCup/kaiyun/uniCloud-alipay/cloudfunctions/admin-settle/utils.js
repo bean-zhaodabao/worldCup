@@ -17,6 +17,7 @@ async function verifyToken(db, token) {
     const crypto = require('crypto')
     const expected = crypto.createHash('md5').update(userId + ':' + timestamp + ':' + u.password).digest('hex').substring(0, 16)
     if (sign !== expected) return null
+    if (u.role !== 'admin') return null
     return { _id: u._id, username: u.username, role: u.role }
   } catch (e) { return null }
 }

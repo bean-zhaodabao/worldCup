@@ -20,9 +20,10 @@ exports.main = async (event, context) => {
   try {
     // ============ GET - 用户列表 ============
     if (method === 'GET') {
-      const { type, keyword, page = 1, pageSize = 20 } = query
+      const { type, keyword, agentId, page = 1, pageSize = 20 } = query
       const where = { role: 'user' }
       if (type) where.type = type
+      if (agentId) where.agentId = agentId
       if (keyword) where.username = new RegExp(keyword, 'i')
 
       const total = await db.collection('users').where(where).count()
@@ -32,24 +33,47 @@ exports.main = async (event, context) => {
         .skip((Number(page) - 1) * Number(pageSize))
         .limit(Number(pageSize))
         .get()
+
+      // 补充代理用户名
+      const agentIds = [...new Set((res.data || []).map(u => u.agentId).filter(Boolean))]
+      let agentMap = {}
+      if (agentIds.length > 0) {
+        const agents = await db.collection('users').where({ _id: cmd.in(agentIds) }).get()
+        ;(agents.data || []).forEach(a => { agentMap[a._id] = a })
+      }
+
       // 不返回密码
-      const list = (res.data || []).map(u => ({
-        _id: u._id, username: u.username, createTime: u.createTime, status: u.status,
-        type: u.type || 'retail',
-        balance: u.balance || 0,
-        frozenBalance: u.frozenBalance || 0
-      }))
+      const list = (res.data || []).map(u => {
+        const agent = u.agentId ? agentMap[u.agentId] : null
+        return {
+          _id: u._id, username: u.username, createTime: u.createTime, status: u.status,
+          type: u.type || 'retail',
+          balance: u.balance || 0,
+          frozenBalance: u.frozenBalance || 0,
+          agentId: u.agentId || null,
+          agentName: agent ? agent.username : '',
+          agentCode: agent ? (agent.agentCode || '') : (u.agentCodeSnapshot || '')
+        }
+      })
       return ok({ list, total: total.total, page: Number(page), pageSize: Number(pageSize) })
     }
 
     // ============ POST - 创建用户 ============
-    if (method === 'POST') {
-      const { username, password, type } = body
+    if (method === 'POST' && !path.includes('/recharge')) {
+      const { username, password, type, agentId } = body
       if (!username || !password) return err('用户名和密码不能为空')
       if (username.length < 3) return err('用户名至少3个字符')
       if (password.length < 6) return err('密码至少6个字符')
       const userType = type === 'collector' ? 'collector' : 'retail'
       if (type !== undefined && type !== 'retail' && type !== 'collector') return err('账户类型无效')
+
+      let agent = null
+      if (agentId) {
+        const aRes = await db.collection('users').doc(agentId).get()
+        agent = (aRes.data && aRes.data[0]) || null
+        if (!agent || agent.role !== 'agent') return err('代理不存在')
+        if (agent.status !== 'active') return err('代理已停用')
+      }
 
       const exist = await db.collection('users').where({ username }).count()
       if (exist.total > 0) return err('用户名已存在')
@@ -61,13 +85,17 @@ exports.main = async (event, context) => {
         balance: 0,
         frozenBalance: 0,
         status: 'active',
+        agentId: agent ? agent._id : null,
+        agentCodeSnapshot: agent ? (agent.agentCode || '') : '',
+        bindTime: agent ? new Date() : null,
         createTime: new Date()
       })
 
       await writeLog(db, {
         adminId: admin._id, adminName: admin.username,
         action: 'create_user', targetType: 'users', targetId: '',
-        detail: '创建用户: ' + username + '(' + (userType === 'collector' ? '收单账户' : '散户') + ')'
+        detail: '创建用户: ' + username + '(' + (userType === 'collector' ? '收单账户' : '散户') + ')' +
+          (agent ? '，归属代理: ' + agent.username : '')
       })
       return ok(null, '用户创建成功')
     }

@@ -1,0 +1,21 @@
+{
+  "bsonType": "object",
+  "required": ["key"],
+  "permission": { "read": false, "create": false, "update": false, "delete": false },
+  "properties": {
+    "_id": { "bsonType": "string" },
+    "key": { "bsonType": "string", "title": "配置键", "default": "default" },
+    "enabled": { "bsonType": "bool", "title": "短信开关", "default": false },
+    "phones": { "bsonType": "array", "title": "接收手机号列表" },
+    "signName": { "bsonType": "string", "title": "阿里云短信签名" },
+    "templateCode": { "bsonType": "string", "title": "短信模板CODE" },
+    "templateParamName": { "bsonType": "string", "title": "模板变量名", "default": "name" },
+    "accessKeyId": { "bsonType": "string", "title": "AccessKey ID" },
+    "accessKeySecret": { "bsonType": "string", "title": "AccessKey Secret" },
+    "minAmount": { "bsonType": "double", "title": "最低通知金额", "default": 0 },
+    "dailyLimit": { "bsonType": "int", "title": "每日发送上限", "default": 1000 },
+    "maxRetry": { "bsonType": "int", "title": "最大重试次数", "default": 3 },
+    "createTime": { "bsonType": "date", "title": "创建时间" },
+    "updateTime": { "bsonType": "date", "title": "更新时间" }
+  }
+}

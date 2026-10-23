@@ -55,6 +55,30 @@ const routes = [
         meta: { title: '用户管理', icon: 'User' }
       },
       {
+        path: 'agent',
+        name: 'Agent',
+        component: () => import('@/views/agent/index.vue'),
+        meta: { title: '代理商管理', icon: 'UserFilled' }
+      },
+      {
+        path: 'agent/:id',
+        name: 'AgentDetail',
+        component: () => import('@/views/agent/detail.vue'),
+        meta: { title: '代理详情', hidden: true }
+      },
+      {
+        path: 'commission',
+        name: 'Commission',
+        component: () => import('@/views/commission/index.vue'),
+        meta: { title: '佣金结算', icon: 'Money' }
+      },
+      {
+        path: 'sms',
+        name: 'Sms',
+        component: () => import('@/views/sms/index.vue'),
+        meta: { title: '短信通知', icon: 'ChatDotRound' }
+      },
+      {
         path: 'withdraw',
         name: 'Withdraw',
         component: () => import('@/views/withdraw/index.vue'),

@@ -74,7 +74,7 @@ exports.main = async (event, context) => {
 
     // ============ GET - 订单列表 ============
     if (method === 'GET') {
-      const { matchId, username, status, page = 1, pageSize = 20 } = query
+      const { matchId, username, agentId, status, page = 1, pageSize = 20 } = query
       const where = { deleted: db.command.neq(true) }
 
       if (status) where.status = status
@@ -83,14 +83,16 @@ exports.main = async (event, context) => {
         where.$or = [{ matchId: matchId }, { matchIds: db.command.in([matchId]) }]
       }
 
+      // 用户名 + 代理筛选（AND 关系；代理按订单快照过滤）
+      let userIdFilter = null
       if (username) {
         const users = await db.collection('users').where({ username: new RegExp(username, 'i') }).get()
-        const userIds = (users.data || []).map(u => u._id)
-        if (userIds.length > 0) {
-          where.userId = db.command.in(userIds)
-        } else {
-          return ok({ list: [], total: 0, page: Number(page) })
-        }
+        userIdFilter = new Set((users.data || []).map(u => u._id))
+      }
+      if (agentId) where.agentId = agentId
+      if (userIdFilter) {
+        if (userIdFilter.size === 0) return ok({ list: [], total: 0, page: Number(page) })
+        where.userId = db.command.in([...userIdFilter])
       }
 
       const total = await db.collection('orders').where(where).count()
@@ -122,10 +124,16 @@ exports.main = async (event, context) => {
         }
 
         const user = await db.collection('users').doc(order.userId).get()
+        let agentName = ''
+        if (order.agentId) {
+          const agentRes = await db.collection('users').doc(order.agentId).get()
+          agentName = (agentRes.data && agentRes.data[0] && agentRes.data[0].username) || ''
+        }
 
         return {
           ...order,
           username: (user.data && user.data[0] && user.data[0].username) || '',
+          agentName,
           matchName: matchesData.length === 1 ? matchesData[0].name : (matchesData.map(m => m.name).join(' / ')),
           matches: matchesData,
           items: items.data || []

@@ -157,3 +157,69 @@ export function getPlayReport(params) {
 export function getProfitReport(params) {
   return request.get('/admin-report/profit', { params })
 }
+
+// ========== 代理商管理 (admin-agent) ==========
+export function getAgentList(params) {
+  return request.get('/admin-agent', { params })
+}
+export function createAgent(data) {
+  return request.post('/admin-agent', data)
+}
+export function getAgentDetail(id) {
+  return request.get('/admin-agent/' + id)
+}
+export function updateAgent(id, data) {
+  return request.post('/admin-agent/' + id, data)
+}
+export function resetAgentPassword(id, password) {
+  return request.post('/admin-agent/' + id + '/password', { password })
+}
+export function getAgentUsers(id, params) {
+  return request.get('/admin-agent/' + id + '/users', { params })
+}
+export function getAgentOrders(id, params) {
+  return request.get('/admin-agent/' + id + '/orders', { params })
+}
+export function getAgentCommission(id, params) {
+  return request.get('/admin-agent/' + id + '/commission', { params })
+}
+export function rebindUserAgent(userId, agentId) {
+  return request.post('/admin-agent/rebind-user', { userId, agentId })
+}
+
+// ========== 佣金结算 (admin-agent-commission) ==========
+export function getCommissionList(params) {
+  return request.get('/admin-agent-commission', { params })
+}
+export function confirmCommission(data) {
+  return request.post('/admin-agent-commission/confirm', data)
+}
+export function recalcCommission() {
+  return request.post('/admin-agent-commission/recalc')
+}
+export function getSettlementList(params) {
+  return request.get('/admin-agent-commission/settlements', { params })
+}
+export function createSettlement(data) {
+  return request.post('/admin-agent-commission/settlements', data)
+}
+export function markSettlementPaid(id, data) {
+  return request.post('/admin-agent-commission/settlements/' + id + '/paid', data || {})
+}
+
+// ========== 短信通知 (admin-sms) ==========
+export function getSmsConfig() {
+  return request.get('/admin-sms/config')
+}
+export function updateSmsConfig(data) {
+  return request.post('/admin-sms/config', data)
+}
+export function testSms(phone) {
+  return request.post('/admin-sms/test', { phone })
+}
+export function getSmsLogs(params) {
+  return request.get('/admin-sms/logs', { params })
+}
+export function retrySms(id) {
+  return request.post('/admin-sms/retry/' + id, { taskId: id })
+}

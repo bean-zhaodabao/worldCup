@@ -13,6 +13,7 @@ function round2(n) { return Math.round(n * 100) / 100 }
 exports.main = async (event, context) => {
   const token = event.token || (event.headers && (event.headers.authorization || event.headers.Authorization || '')).replace('Bearer ', '')
   const user = await verifyToken(db, token)
+  if (user && user.role !== 'user') return fail('无权限', 403)
   if (!user) return fail('未登录或登录已过期', 401)
 
   try {

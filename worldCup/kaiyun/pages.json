@@ -3,7 +3,7 @@
 		{
 			"path": "pages/index/index",
 			"style": {
-				"navigationBarTitleText": "世界杯赛事"
+				"navigationBarTitleText": "足球赛事"
 			}
 		},
 		{
@@ -49,6 +49,20 @@
 			}
 		}
 	],
+	"subPackages": [
+		{
+			"root": "pages-agent",
+			"pages": [
+				{ "path": "workbench/index", "style": { "navigationBarTitleText": "代理工作台" } },
+				{ "path": "user/list", "style": { "navigationBarTitleText": "我的用户" } },
+				{ "path": "user/detail", "style": { "navigationBarTitleText": "用户详情" } },
+				{ "path": "order/list", "style": { "navigationBarTitleText": "用户订单" } },
+				{ "path": "order/detail", "style": { "navigationBarTitleText": "订单详情" } },
+				{ "path": "commission/index", "style": { "navigationBarTitleText": "我的佣金" } },
+				{ "path": "profile/index", "style": { "navigationBarTitleText": "我的" } }
+			]
+		}
+	],
 	"tabBar": {
 		"color": "#999999",
 		"selectedColor": "#1a237e",
@@ -77,7 +91,7 @@
 	},
 	"globalStyle": {
 		"navigationBarTextStyle": "white",
-		"navigationBarTitleText": "世界杯彩票",
+		"navigationBarTitleText": "足球彩票",
 		"navigationBarBackgroundColor": "#1a237e",
 		"backgroundColor": "#f0f2f5"
 	},

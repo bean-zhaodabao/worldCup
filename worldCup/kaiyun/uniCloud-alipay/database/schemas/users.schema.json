@@ -15,8 +15,9 @@
     "role": {
       "bsonType": "string",
       "title": "角色",
-      "enum": ["user", "admin"],
-      "default": "user"
+      "enum": ["user", "agent", "admin"],
+      "default": "user",
+      "description": "user=移动端用户；agent=代理商（只读后台）；admin=管理员"
     },
     "type": {
       "bsonType": "string",
@@ -42,6 +43,56 @@
       "title": "状态",
       "enum": ["active", "disabled"],
       "default": "active"
+    },
+    "agentId": {
+      "bsonType": "string",
+      "title": "所属代理ID",
+      "description": "role=user 时生效，表示当前归属代理；由管理员分配",
+      "foreignKey": "users._id"
+    },
+    "agentCodeSnapshot": {
+      "bsonType": "string",
+      "title": "所属代理编号快照"
+    },
+    "bindTime": {
+      "bsonType": "date",
+      "title": "绑定代理时间"
+    },
+    "agentCode": {
+      "bsonType": "string",
+      "title": "代理编号",
+      "description": "role=agent 时生效，唯一编号，如 AG0001"
+    },
+    "commissionRate": {
+      "bsonType": "double",
+      "title": "佣金比例(%)",
+      "description": "role=agent 时生效，按流水返佣；2.5 表示 2.5%",
+      "default": 0
+    },
+    "commissionBalance": {
+      "bsonType": "double",
+      "title": "待结算佣金",
+      "description": "已确认、待线下结算的佣金",
+      "default": 0
+    },
+    "paidCommission": {
+      "bsonType": "double",
+      "title": "已支付佣金",
+      "default": 0
+    },
+    "totalCommission": {
+      "bsonType": "double",
+      "title": "累计产生佣金",
+      "default": 0
+    },
+    "parentAgentId": {
+      "bsonType": "string",
+      "title": "上级代理ID",
+      "description": "预留，二期多级代理使用"
+    },
+    "remark": {
+      "bsonType": "string",
+      "title": "备注"
     },
     "createTime": {
       "bsonType": "date",

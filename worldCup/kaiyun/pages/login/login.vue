@@ -2,7 +2,7 @@
   <view class="login-page">
     <view class="login-header">
       <image class="logo" src="/static/football.png"></image>
-      <text class="app-name">世界杯彩票</text>
+      <text class="app-name">足球彩票</text>
     </view>
     <view class="login-form">
       <view class="form-item">
@@ -37,13 +37,21 @@ const handleLogin = async () => {
       data: { username: username.value, password: password.value }
     })
     if (res.result && res.result.code === 0) {
-      uni.setStorageSync('token', res.result.data.token)
+      const d = res.result.data
+      uni.setStorageSync('token', d.token)
       uni.setStorageSync('userInfo', JSON.stringify({
-        _id: res.result.data.userId,
-        username: res.result.data.username,
-        type: res.result.data.type || 'retail'
+        _id: d.userId,
+        username: d.username,
+        role: d.role || 'user',
+        type: d.type || 'retail',
+        agentCode: d.agentCode || '',
+        commissionRate: d.commissionRate || 0
       }))
-      uni.reLaunch({ url: '/pages/index/index' })
+      if (d.role === 'agent') {
+        uni.reLaunch({ url: '/pages-agent/workbench/index' })
+      } else {
+        uni.reLaunch({ url: '/pages/index/index' })
+      }
     } else {
       uni.showToast({ title: res.result?.message || '登录失败', icon: 'error' })
     }

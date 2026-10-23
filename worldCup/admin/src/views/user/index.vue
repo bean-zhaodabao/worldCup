@@ -10,9 +10,14 @@
           </el-select>
         </el-form-item>
         <el-form-item label="用户名"><el-input v-model="qf.keyword" placeholder="搜索" clearable style="width:160px" /></el-form-item>
+        <el-form-item label="所属代理">
+          <el-select v-model="qf.agentId" placeholder="全部" clearable filterable style="width:180px">
+            <el-option v-for="a in agentOpts" :key="a._id" :label="a.agentCode + ' / ' + a.username" :value="a._id" />
+          </el-select>
+        </el-form-item>
         <el-form-item>
           <el-button type="primary" icon="Search" @click="loadList">搜索</el-button>
-          <el-button icon="Refresh" @click="qf.type='';qf.keyword='';loadList()">重置</el-button>
+          <el-button icon="Refresh" @click="qf.type='';qf.keyword='';qf.agentId='';loadList()">重置</el-button>
         </el-form-item>
       </el-form>
     </el-card>
@@ -30,6 +35,12 @@
         <el-table-column label="可用余额" width="130">
           <template #default="{row}"><span style="color:#d32f2f;font-weight:bold">¥{{ Number(row.balance||0).toFixed(2) }}</span></template>
         </el-table-column>
+        <el-table-column label="所属代理" width="160">
+          <template #default="{row}">
+            <span v-if="row.agentName">{{ row.agentName }}</span>
+            <span v-else style="color:#bbb">未分配</span>
+          </template>
+        </el-table-column>
         <el-table-column label="冻结余额" width="110">
           <template #default="{row}">¥{{ Number(row.frozenBalance||0).toFixed(2) }}</template>
         </el-table-column>
@@ -41,10 +52,11 @@
         <el-table-column label="创建时间" width="180">
           <template #default="{row}">{{ fmt(row.createTime) }}</template>
         </el-table-column>
-        <el-table-column label="操作" min-width="300">
+        <el-table-column label="操作" min-width="360">
           <template #default="{row}">
             <el-button size="small" type="success" @click="openRecharge(row)">充值</el-button>
             <el-button size="small" @click="openResetPwd(row)">重置密码</el-button>
+            <el-button size="small" @click="openTransfer(row)">转移代理</el-button>
             <el-button size="small" :type="row.status==='active'?'warning':'success'" @click="toggleStatus(row)">
               {{ row.status==='active'?'禁用':'启用' }}
             </el-button>
@@ -63,6 +75,11 @@
             <el-radio value="retail">散户（有钱包，下注校验余额）</el-radio>
             <el-radio value="collector">收单账户（下注不校验余额）</el-radio>
           </el-radio-group>
+        </el-form-item>
+        <el-form-item label="所属代理">
+          <el-select v-model="addForm.agentId" placeholder="不分配" clearable filterable style="width:100%">
+            <el-option v-for="a in agentOpts" :key="a._id" :label="a.agentCode + ' / ' + a.username" :value="a._id" />
+          </el-select>
         </el-form-item>
       </el-form>
       <template #footer><el-button @click="addVisible=false">取消</el-button><el-button type="primary" @click="doCreate" :loading="saving">确认创建</el-button></template>
@@ -85,17 +102,43 @@
       </el-form>
       <template #footer><el-button @click="pwdVisible=false">取消</el-button><el-button type="primary" @click="doResetPwd" :loading="saving">确认</el-button></template>
     </el-dialog>
+
+    <el-dialog title="转移代理" v-model="transferVisible" width="420px">
+      <el-form label-width="90px">
+        <el-form-item label="用户"><el-input :value="transferUser?.username" disabled /></el-form-item>
+        <el-form-item label="当前代理">
+          <el-input :value="transferUser?.agentName || '未分配'" disabled />
+        </el-form-item>
+        <el-form-item label="新代理">
+          <el-select v-model="transferAgentId" placeholder="不分配（移出代理）" clearable filterable style="width:100%">
+            <el-option v-for="a in agentOpts" :key="a._id" :label="a.agentCode + ' / ' + a.username" :value="a._id" />
+          </el-select>
+        </el-form-item>
+        <el-form-item>
+          <span style="color:#909399;font-size:12px">历史订单佣金仍归下单时的代理，新订单归新代理。</span>
+        </el-form-item>
+      </el-form>
+      <template #footer><el-button @click="transferVisible=false">取消</el-button><el-button type="primary" @click="doTransfer" :loading="saving">确认转移</el-button></template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { getUserList, createUser, resetUserPassword, rechargeUser, updateUserStatus } from '@/api'
+import { getUserList, createUser, resetUserPassword, rechargeUser, updateUserStatus, getAgentList, rebindUserAgent } from '@/api'
 
 const loading = ref(false), saving = ref(false)
 const list = ref([]), page = ref(1), ps = ref(20), total = ref(0)
-const qf = reactive({ type: '', keyword: '' })
+const qf = reactive({ type: '', keyword: '', agentId: '' })
+const agentOpts = ref([])
+
+onMounted(async () => {
+  try {
+    const res = await getAgentList({ pageSize: 100 })
+    agentOpts.value = res.data.list || []
+  } catch (e) { console.error(e) }
+})
 
 const loadList = async () => {
   loading.value = true
@@ -108,8 +151,8 @@ const loadList = async () => {
 }
 loadList()
 
-const addVisible = ref(false), addFormRef = ref(null), addForm = reactive({ username: '', password: '', type: 'retail' })
-const openAdd = () => { Object.assign(addForm, { username: '', password: '', type: 'retail' }); addVisible.value = true }
+const addVisible = ref(false), addFormRef = ref(null), addForm = reactive({ username: '', password: '', type: 'collector', agentId: '' })
+const openAdd = () => { Object.assign(addForm, { username: '', password: '', type: 'collector', agentId: '' }); addVisible.value = true }
 const doCreate = async () => {
   if (!addForm.username || addForm.username.length < 3) { ElMessage.warning('用户名至少3个字符'); return }
   if (!addForm.password || addForm.password.length < 6) { ElMessage.warning('密码至少6个字符'); return }
@@ -143,6 +186,23 @@ const toggleStatus = async (row) => {
   const next = row.status === 'active' ? 'disabled' : 'active'
   try { await updateUserStatus(row._id, next); ElMessage.success(next === 'active' ? '已启用' : '已禁用'); loadList() }
   catch (e) { ElMessage.error(e.message || '操作失败') }
+}
+
+const transferVisible = ref(false), transferUser = ref(null), transferAgentId = ref('')
+const openTransfer = (row) => {
+  transferUser.value = row
+  transferAgentId.value = row.agentId || ''
+  transferVisible.value = true
+}
+const doTransfer = async () => {
+  saving.value = true
+  try {
+    await rebindUserAgent(transferUser.value._id, transferAgentId.value || '')
+    transferVisible.value = false
+    ElMessage.success('用户归属已更新')
+    loadList()
+  } catch (e) { ElMessage.error(e.message || '转移失败') }
+  saving.value = false
 }
 
 const fmt = (t) => t ? new Date(t).toLocaleString('zh-CN') : ''

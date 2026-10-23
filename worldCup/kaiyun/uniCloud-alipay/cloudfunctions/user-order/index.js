@@ -26,6 +26,7 @@ exports.main = async (event, context) => {
   const token = event.token || (isHttp && event.headers && (event.headers.authorization || event.headers.Authorization || '')).replace('Bearer ', '')
   const user = await verifyToken(db, token)
   if (!user) return fail('未登录或登录已过期', 401)
+  if (user.role !== 'user') return fail('无下注权限', 403)
 
   try {
     // ============ 判断操作类型 ============
@@ -168,6 +169,18 @@ exports.main = async (event, context) => {
 
     // ===== 创建订单 =====
     try {
+      // 读取用户当前归属代理，下单时快照，后续转移/调比例不影响本单
+      const userDocRes = await db.collection('users').doc(user._id).get()
+      const userDoc = (userDocRes.data && userDocRes.data[0]) || {}
+      const agentId = userDoc.agentId || null
+      let agentRate = 0
+      if (agentId) {
+        const agentRes = await db.collection('users').doc(agentId).get()
+        const agentDoc = (agentRes.data && agentRes.data[0]) || {}
+        if (agentDoc.role === 'agent' && agentDoc.status === 'active') {
+          agentRate = Number(agentDoc.commissionRate || 0)
+        }
+      }
       const orderNo = generateOrderNo()
       const orderData = {
         orderNo,
@@ -179,6 +192,9 @@ exports.main = async (event, context) => {
         winAmount: 0,
         status: 'pending',
         isParlay: !!isParlay,
+        agentId: agentId || null,
+        agentRate: agentRate,
+        commissionStatus: agentId ? 'none' : 'skipped',
         createTime: new Date()
       }
       const orderRes = await db.collection('orders').add(orderData)
@@ -215,6 +231,26 @@ exports.main = async (event, context) => {
         orderNo,
         remark: isParlay ? '串关下注' : '单关下注'
       })
+
+      // 短信通知任务（独立 try/catch，失败不影响下单）
+      try {
+        await db.collection('sms-tasks').add({
+          type: 'bet',
+          orderId: orderRes.id,
+          orderNo,
+          userId: user._id,
+          userName: user.username || '用户',
+          betAmount: amount,
+          status: 'pending',
+          attempts: 0,
+          nextRetryAt: new Date(),
+          lastError: '',
+          createTime: new Date(),
+          updateTime: new Date()
+        })
+      } catch (smsErr) {
+        console.error('sms task create error:', smsErr)
+      }
 
       return success({
         orderId: orderRes.id,

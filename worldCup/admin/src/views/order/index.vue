@@ -5,6 +5,11 @@
       <el-form :inline="true" :model="qf">
         <el-form-item label="赛事"><el-select v-model="qf.matchId" placeholder="全部" clearable filterable style="width:180px"><el-option v-for="m in matchOpts" :key="m._id" :label="m.name" :value="m._id" /></el-select></el-form-item>
         <el-form-item label="用户名"><el-input v-model="qf.username" placeholder="搜索" clearable /></el-form-item>
+        <el-form-item label="所属代理">
+          <el-select v-model="qf.agentId" placeholder="全部" clearable filterable style="width:180px">
+            <el-option v-for="a in agentOpts" :key="a._id" :label="a.agentCode + ' / ' + a.username" :value="a._id" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="状态"><el-select v-model="qf.status" placeholder="全部" clearable style="width:100px"><el-option label="待开奖" value="pending"/><el-option label="已中奖" value="won"/><el-option label="未中奖" value="lost"/><el-option label="已结算" value="settled"/><el-option label="已退款" value="refunded"/></el-select></el-form-item>
         <el-form-item><el-button type="primary" icon="Search" @click="loadList">搜索</el-button></el-form-item>
       </el-form>
@@ -21,6 +26,9 @@
         <el-table-column type="selection" width="45" />
         <el-table-column prop="orderNo" label="单号" width="180" />
         <el-table-column prop="username" label="用户" width="100" />
+        <el-table-column label="代理" width="110">
+          <template #default="{row}">{{ row.agentName || '-' }}</template>
+        </el-table-column>
         <el-table-column label="赛事" width="140"><template #default="{row}">{{ row.matchName }}</template></el-table-column>
         <el-table-column label="玩法明细" min-width="180">
           <template #default="{row}"><span v-for="it in (row.items||[])" :key="it._id" style="margin-right:8px">{{ it.playName }}@{{ it.oddsSnapshot }}</span></template>
@@ -43,16 +51,17 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getOrderList, getOrderStats, getMatchList, deleteOrder, batchDeleteOrders } from '@/api'
+import { getOrderList, getOrderStats, getMatchList, deleteOrder, batchDeleteOrders, getAgentList } from '@/api'
 
 const loading=ref(false),list=ref([]),page=ref(1),ps=ref(20),total=ref(0),selectedRows=ref([])
-const qf=reactive({matchId:'',username:'',status:''})
+const qf=reactive({matchId:'',username:'',agentId:'',status:''})
 const stats=reactive({dailyTotal:'0.00',winTotal:'0.00',orderCount:0})
 const matchOpts=ref([])
+const agentOpts=ref([])
 
 const loadList=async()=>{loading.value=true;try{const res=await getOrderList({...qf,page:page.value,pageSize:ps.value});list.value=res.data.list||[];total.value=res.data.total||0;refreshStats()}catch(e){console.error(e)}loading.value=false}
 const refreshStats=async()=>{try{const res=await getOrderStats({matchId:qf.matchId,username:qf.username});Object.assign(stats,{dailyTotal:(res.data.dailyUserTotal||0).toFixed(2),winTotal:(res.data.userMatchWinTotal||0).toFixed(2),orderCount:res.data.orderCount})}catch(e){}}
-onMounted(async()=>{const m=await getMatchList({pageSize:500});matchOpts.value=m.data.list||[];loadList()})
+onMounted(async()=>{const m=await getMatchList({pageSize:500});matchOpts.value=m.data.list||[];try{const a=await getAgentList({pageSize:100});agentOpts.value=a.data.list||[]}catch(e){}loadList()})
 const fmt=(t)=>t?new Date(t).toLocaleString('zh-CN'):''
 const handleSelectionChange=(rows)=>{selectedRows.value=rows}
 const doDelete=async(row)=>{try{await deleteOrder(row._id);ElMessage.success('已删除');loadList()}catch(e){ElMessage.error(e.message||'删除失败')}}

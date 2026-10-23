@@ -223,6 +223,10 @@ const handleCartConfirm = async (betData) => {
 const loadMatches = async () => {
   const token = uni.getStorageSync('token')
   if (!token) { uni.reLaunch({ url: '/pages/login/login' }); return }
+  try {
+    const info = JSON.parse(uni.getStorageSync('userInfo') || '{}')
+    if (info.role === 'agent') { uni.reLaunch({ url: '/pages-agent/workbench/index' }); return }
+  } catch (e) {}
 
   loading.value = true
   try {

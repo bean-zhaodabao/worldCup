@@ -32,12 +32,19 @@ exports.main = async (event, context) => {
   }
 
   // 2. 初始化系统配置
-  const configKeys = ['minBet', 'maxBet', 'matchDays']
+  const configKeys = ['minBet', 'maxBet', 'matchDays', 'agentCommissionEnabled', 'agentDefaultRate', 'agentCommissionConfirm']
   for (const key of configKeys) {
     const existCfg = await db.collection('system-config').where({ key }).count()
     if (existCfg.total === 0) {
-      const defaults = { minBet: '2.00', maxBet: '100000.00', matchDays: '2' }
-      const descs = { minBet: '单注最低金额', maxBet: '单注最高金额', matchDays: '移动端赛事展示天数(含今天, 默认2)' }
+      const defaults = {
+        minBet: '2.00', maxBet: '100000.00', matchDays: '2',
+        agentCommissionEnabled: 'true', agentDefaultRate: '2.5', agentCommissionConfirm: 'manual'
+      }
+      const descs = {
+        minBet: '单注最低金额', maxBet: '单注最高金额', matchDays: '移动端赛事展示天数(含今天, 默认2)',
+        agentCommissionEnabled: '代理佣金开关', agentDefaultRate: '新建代理默认佣金比例(%)',
+        agentCommissionConfirm: '佣金确认方式: manual/auto'
+      }
       await db.collection('system-config').add({
         key, value: defaults[key], description: descs[key], updateTime: new Date()
       })
@@ -45,14 +52,43 @@ exports.main = async (event, context) => {
     }
   }
 
+  // 2.1 初始化短信配置（密钥留空，部署后在管理端填写）
+  let smsCount = 0
+  try {
+    const smsExist = await db.collection('sms-config').count()
+    smsCount = smsExist.total || 0
+  } catch (e) {
+    smsCount = 0
+  }
+  if (smsCount === 0) {
+    await db.collection('sms-config').add({
+      key: 'default',
+      enabled: false,
+      phones: ['18298380835'],
+      signName: '甘肃食为天餐饮管理',
+      templateCode: 'SMS_512616834',
+      templateParamName: 'name',
+      accessKeyId: '',
+      accessKeySecret: '',
+      minAmount: 0,
+      dailyLimit: 1000,
+      maxRetry: 3,
+      createTime: new Date(),
+      updateTime: new Date()
+    })
+    results.push('短信配置已初始化（请在管理端填写 AccessKey 后开启）')
+  } else {
+    results.push('短信配置已存在，跳过')
+  }
+
   // 3. 初始化玩法分类（标准7组玩法：5大类 + 7小类）
-  // 结构: 胜平负(胜平负/让球胜平负)、进球(总进球数区间/大小球)、比分(正确比分)、半全场(半全场胜平负)、盘口(让球盘)
+  // 结构: 胜平负(胜平负/让球胜平负)、盘口(让球盘)、进球(总进球数区间/大小球)、比分(正确比分)、半全场(半全场胜平负)
   const bigCatDefs = [
     { name: '胜平负', sort: 1 },
-    { name: '进球', sort: 2 },
-    { name: '比分', sort: 3 },
-    { name: '半全场', sort: 4 },
-    { name: '盘口', sort: 5 }
+    { name: '盘口', sort: 2 },
+    { name: '进球', sort: 3 },
+    { name: '比分', sort: 4 },
+    { name: '半全场', sort: 5 }
   ]
   const smallCatDefs = [
     { name: '胜平负', parent: '胜平负', sort: 1 },

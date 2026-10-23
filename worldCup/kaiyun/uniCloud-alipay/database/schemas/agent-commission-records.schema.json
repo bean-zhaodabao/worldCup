@@ -1,0 +1,31 @@
+{
+  "bsonType": "object",
+  "required": ["agentId", "orderId", "amount", "status"],
+  "properties": {
+    "_id": { "bsonType": "string" },
+    "agentId": { "bsonType": "string", "title": "代理用户ID", "foreignKey": "users._id" },
+    "agentName": { "bsonType": "string", "title": "代理用户名" },
+    "userId": { "bsonType": "string", "title": "下单用户ID", "foreignKey": "users._id" },
+    "userName": { "bsonType": "string", "title": "下单用户名" },
+    "orderId": { "bsonType": "string", "title": "订单ID", "foreignKey": "orders._id" },
+    "orderNo": { "bsonType": "string", "title": "订单号" },
+    "orderBetAmount": { "bsonType": "double", "title": "订单下注额快照" },
+    "orderWinAmount": { "bsonType": "double", "title": "订单返还额快照（含本金）" },
+    "baseType": { "bsonType": "string", "title": "计佣基数类型", "enum": ["turnover"], "default": "turnover" },
+    "baseAmount": { "bsonType": "double", "title": "计佣基数" },
+    "rate": { "bsonType": "double", "title": "佣金比例快照(%)" },
+    "amount": { "bsonType": "double", "title": "佣金金额" },
+    "status": {
+      "bsonType": "string",
+      "title": "状态",
+      "enum": ["pending", "available", "paid", "void"],
+      "default": "pending"
+    },
+    "settlementId": { "bsonType": "string", "title": "结算批次ID" },
+    "orderSettledAt": { "bsonType": "date", "title": "订单结算时间" },
+    "createTime": { "bsonType": "date", "title": "创建时间" },
+    "confirmTime": { "bsonType": "date", "title": "确认时间" },
+    "payTime": { "bsonType": "date", "title": "支付时间" },
+    "remark": { "bsonType": "string", "title": "备注" }
+  }
+}

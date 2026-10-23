@@ -52,6 +52,36 @@
       "title": "是否串关",
       "default": false
     },
+    "agentId": {
+      "bsonType": "string",
+      "title": "下单时归属代理ID",
+      "description": "下单时快照，null 表示无代理；用户转移代理后历史订单不变"
+    },
+    "agentRate": {
+      "bsonType": "double",
+      "title": "下单时佣金比例(%)",
+      "description": "下单时快照，后续调整代理比例不影响本单"
+    },
+    "commissionStatus": {
+      "bsonType": "string",
+      "title": "佣金状态",
+      "enum": ["none", "pending", "available", "paid", "void", "skipped"],
+      "default": "none",
+      "description": "none=未处理；pending=待确认；available=可结算；paid=已支付；void=已冲销；skipped=不参与"
+    },
+    "commissionAmount": {
+      "bsonType": "double",
+      "title": "本单佣金",
+      "default": 0
+    },
+    "commissionRecordId": {
+      "bsonType": "string",
+      "title": "关联佣金记录ID"
+    },
+    "commissionTime": {
+      "bsonType": "date",
+      "title": "佣金处理时间"
+    },
     "deleted": {
       "bsonType": "bool",
       "title": "逻辑删除",

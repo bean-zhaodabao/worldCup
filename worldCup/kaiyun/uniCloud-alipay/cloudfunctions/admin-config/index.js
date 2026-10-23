@@ -7,7 +7,10 @@ const { ok, err, verifyToken } = require('./utils')
 const DEFAULT_CONFIG = {
   minBet: { value: '2.00', description: '单注最低金额' },
   maxBet: { value: '100000.00', description: '单注最高金额' },
-  matchDays: { value: '2', description: '移动端赛事展示天数(含今天, 默认2)' }
+  matchDays: { value: '2', description: '移动端赛事展示天数(含今天, 默认2)' },
+  agentCommissionEnabled: { value: 'true', description: '代理佣金开关' },
+  agentDefaultRate: { value: '2.5', description: '新建代理默认佣金比例(%)' },
+  agentCommissionConfirm: { value: 'manual', description: '佣金确认方式: manual/auto' }
 }
 
 exports.main = async (event, context) => {

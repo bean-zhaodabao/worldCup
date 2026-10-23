@@ -22,6 +22,7 @@ exports.main = async (event, context) => {
   const token = event.token || (event.headers && (event.headers.authorization || event.headers.Authorization || '')).replace('Bearer ', '')
   const user = await verifyToken(db, token)
   if (!user) return fail('未登录或登录已过期', 401)
+  if (user.role !== 'user') return fail('无权限', 403)
 
   try {
     // 0. 读取移动端赛事展示天数(后台 system-config.matchDays, 默认2天)
