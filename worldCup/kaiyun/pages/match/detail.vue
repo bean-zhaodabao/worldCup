@@ -44,8 +44,7 @@
         <view class="sub-cat-title">
           <text>{{ subTitle(sub) }}</text>
           <text class="rq-hint" v-if="sub.name === '让球胜平负' && rqGoal(sub) !== null">
-            {{ rqGoalText(sub) }}
-            <text class="rq-hint-cn">{{ rqGoalCn(sub) }}</text>
+            {{ rqGoalCn(sub) }}：{{ rqGoalText(sub) }}
           </text>
         </view>
 
@@ -212,21 +211,21 @@ const subTitle = (sub) => sub.name
 /** 让球胜平负: 让球数 */
 const rqGoal = (sub) => {
   if (!sub.plays || sub.plays.length === 0) return null
-  return sub.plays[0].handicap
+  const h = sub.plays[0].handicap
+  return h === undefined ? null : h
 }
 const rqGoalText = (sub) => {
   const g = rqGoal(sub)
   if (g === null) return ''
-  return '(' + rqHandicapText(g) + ')'
+  return rqHandicapText(g)
 }
 const rqGoalCn = (sub) => {
   const g = rqGoal(sub)
   if (g === null) return ''
-  if (g === 0) return '平手'
-  return g > 0 ? ('主队受让' + g + '球') : ('主队让' + Math.abs(g) + '球')
+  return rqHandicapCn(g)
 }
 
-/** 盘口数值 -> 让球用带符号数字, 大小球用数字样式 */
+/** 盘口数值 -> 让球用带符号拆分盘口, 大小球用数字样式 */
 const handicapText = (n, subName) => {
   if (subName === '大小球') return dxqHandicapText(n)
   return rqHandicapText(n)
@@ -539,7 +538,6 @@ onUnload(() => {
     border-left: 4rpx solid #1a237e; line-height: 1.2;
     display: flex; align-items: center; gap: 10rpx;
     .rq-hint { font-size: 22rpx; color: #ef6c00; }
-    .rq-hint-cn { font-size: 18rpx; color: #999; margin-left: 6rpx; }
   }
   .play-grid {
     display: grid; gap: 12rpx;

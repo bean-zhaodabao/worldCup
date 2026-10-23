@@ -245,7 +245,7 @@ function playOddsText(p) {
   return fmtOdds(p.odds || 0)
 }
 
-/** 盘口数值 -> 让球用带符号数字, 大小球用数字样式盘口(2.5/2.5-3) */
+/** 盘口数值 -> 让球用带符号拆分盘口, 大小球用数字样式盘口(2.5/2.5-3) */
 function handicapText(n, sourceKey) {
   const isDxq = (sourceKey || '').indexOf('dxq:') === 0
   return isDxq ? dxqHandicapText(n) : rqHandicapText(n)

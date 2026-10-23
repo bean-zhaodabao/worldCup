@@ -18,12 +18,36 @@ export function dxqHandicapText(n) {
   return String(v)
 }
 
-/** 让球盘口数值 -> 带符号数字: 0 -> "0", 1 -> "+1", -1 -> "-1", 0.75 -> "+0.75" */
+/** 让球盘口数值 -> 带符号拆分盘口
+ *  0 -> "0"
+ *  0.25 -> "+0/0.5"
+ *  0.5 -> "+0.5"
+ *  0.75 -> "+0.5/1"
+ *  -0.75 -> "-0.5/1"
+ */
 export function rqHandicapText(n) {
   const num = Number(n)
   if (!isFinite(num) || num === 0) return '0'
-  const v = Math.round(Math.abs(num) * 100) / 100
-  return (num > 0 ? '+' : '-') + v
+  const abs = Math.round(Math.abs(num) * 100) / 100
+  const sign = num > 0 ? '+' : '-'
+
+  // 非四分之一盘（正常情况下不会出现），回退为带符号小数
+  const isQuarter = Math.abs(abs * 4 - Math.round(abs * 4)) < 0.001
+  if (!isQuarter) return sign + fmtHandicapNum(abs)
+
+  const low = Math.floor(abs * 2) / 2
+  const high = low + 0.5
+
+  // 整数/半球盘：0.5 -> "+0.5"，1 -> "+1"
+  if (Math.abs(low - abs) < 0.001) return sign + fmtHandicapNum(abs)
+
+  // 四分之一盘：0.25 -> "0/0.5"，0.75 -> "0.5/1"
+  return sign + fmtHandicapNum(low) + '/' + fmtHandicapNum(high)
+}
+
+function fmtHandicapNum(v) {
+  const n = Math.round(Number(v) * 100) / 100
+  return String(n)
 }
 
 /** 让球盘口数值 -> 中文文案: 0 -> "平手", 1 -> "受让一球", -0.75 -> "让半球/一球" */
