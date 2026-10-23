@@ -4,7 +4,7 @@
       <!-- 侧边栏 -->
       <el-aside :width="isCollapse ? '64px' : '220px'" class="aside">
         <div class="logo">
-          <span v-if="!isCollapse">🏆 世界杯彩票管理</span>
+          <span v-if="!isCollapse">🏆 足球彩票管理</span>
           <span v-else>🏆</span>
         </div>
         <el-menu

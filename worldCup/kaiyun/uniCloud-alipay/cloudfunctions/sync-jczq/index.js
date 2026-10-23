@@ -338,10 +338,10 @@ async function settleFinishedMatch(match, stats) {
 
 const BIG_CATS = [
   { name: '胜平负', sort: 1 },
-  { name: '进球', sort: 2 },
-  { name: '比分', sort: 3 },
-  { name: '半全场', sort: 4 },
-  { name: '盘口', sort: 5 }
+  { name: '盘口', sort: 2 },
+  { name: '进球', sort: 3 },
+  { name: '比分', sort: 4 },
+  { name: '半全场', sort: 5 }
 ]
 const SMALL_CATS = [
   { name: '胜平负', parent: '胜平负', sort: 1 },

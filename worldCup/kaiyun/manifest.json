@@ -50,7 +50,7 @@
     "quickapp" : {},
     /* 小程序特有相关 *//* H5 配置 - 移动端仅H5 */
     "h5" : {
-        "title" : "世界杯彩票",
+        "title" : "足球彩票",
         "router" : {
             "mode" : "hash",
             "base" : "./"

@@ -1,7 +1,7 @@
 <script>
 export default {
   onLaunch: function () {
-    console.log('世界杯彩票 H5 启动')
+    console.log('足球彩票 H5 启动')
     // 检查登录状态
     const token = uni.getStorageSync('token')
     if (!token) {

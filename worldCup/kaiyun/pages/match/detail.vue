@@ -43,7 +43,10 @@
       <view class="sub-category" v-for="sub in bigCat.subCategories" :key="sub.name">
         <view class="sub-cat-title">
           <text>{{ subTitle(sub) }}</text>
-          <text class="rq-hint" v-if="sub.name === '让球胜平负' && rqGoal(sub) !== null">{{ rqGoalText(sub) }}</text>
+          <text class="rq-hint" v-if="sub.name === '让球胜平负' && rqGoal(sub) !== null">
+            {{ rqGoalText(sub) }}
+            <text class="rq-hint-cn">{{ rqGoalCn(sub) }}</text>
+          </text>
         </view>
 
         <!-- 盘口表格(让球盘/大小球) -->
@@ -54,7 +57,10 @@
             <text class="pk-col">{{ sub.name === '让球盘' ? match.teamB : '小球' }}</text>
           </view>
           <view class="pk-row" v-for="row in sub.handicapPlays" :key="row.handicap">
-            <text class="pk-col pk-line">{{ handicapText(row.handicap, sub.name) }}</text>
+            <text class="pk-col pk-line">
+              {{ handicapText(row.handicap, sub.name) }}
+              <text class="pk-cn" v-if="sub.name !== '大小球'">{{ rqHandicapCn(row.handicap) }}</text>
+            </text>
             <view class="pk-col pk-cell" v-if="row.home" :class="{ selected: selectedPlay._id === row.home._id }" @click="selectPlay(row.home)">
               <text class="pk-water">{{ fmtOdds(row.home.water || row.home.odds) }}</text>
             </view>
@@ -114,7 +120,10 @@
 
       <view class="action-row" v-else-if="selectedPlay._id">
         <view class="selected-info">
-          <text class="sel-play">{{ selectedDisplayName }}</text>
+          <text class="sel-play">
+            {{ selectedDisplayName }}
+            <text class="sel-cn" v-if="selectedHandicapCn">{{ selectedHandicapCn }}</text>
+          </text>
           <text class="sel-odds">@{{ selectedOddsText }}</text>
         </view>
         <view class="btn-group">
@@ -164,7 +173,7 @@ import { onLoad, onUnload } from '@dcloudio/uni-app'
 import BetSheet from '@/components/bet-sheet/bet-sheet.vue'
 import { betCart } from '@/stores/betCart.js'
 import { startPolling, stopPolling } from '@/utils/oddsPoller.js'
-import { fmtOdds, dxqHandicapText } from '@/utils/format.js'
+import { fmtOdds, dxqHandicapText, rqHandicapText, rqHandicapCn } from '@/utils/format.js'
 
 const match = ref({})
 const selectedPlay = ref({})
@@ -208,28 +217,19 @@ const rqGoal = (sub) => {
 const rqGoalText = (sub) => {
   const g = rqGoal(sub)
   if (g === null) return ''
-  if (g === 0) return '(平手)'
-  return g > 0 ? '(主队受让' + g + '球)' : '(主队让' + Math.abs(g) + '球)'
+  return '(' + rqHandicapText(g) + ')'
+}
+const rqGoalCn = (sub) => {
+  const g = rqGoal(sub)
+  if (g === null) return ''
+  if (g === 0) return '平手'
+  return g > 0 ? ('主队受让' + g + '球') : ('主队让' + Math.abs(g) + '球')
 }
 
-/** 盘口数值 -> 中文 */
+/** 盘口数值 -> 让球用带符号数字, 大小球用数字样式 */
 const handicapText = (n, subName) => {
-  const v = Math.abs(n)
-  const map = [
-    [0, '平手'], [0.25, '平手/半球'], [0.5, '半球'], [0.75, '半球/一球'],
-    [1, '一球'], [1.25, '一球/一球半'], [1.5, '一球半'], [1.75, '一球半/二球'],
-    [2, '二球'], [2.25, '二球/二球半'], [2.5, '二球半'], [2.75, '二球半/三球'],
-    [3, '三球'], [3.25, '三球/三球半'], [3.5, '三球半'], [3.75, '三球半/四球'],
-    [4, '四球'], [4.25, '四球/四球半'], [4.5, '四球半'], [4.75, '四球半/五球'], [5, '五球']
-  ]
-  let text = ''
-  for (const [k, t] of map) {
-    if (Math.abs(v - k) < 0.001) { text = t; break }
-  }
-  if (!text) text = String(v)
-  if (subName === '大小球') return dxqHandicapText(v)
-  if (n === 0) return '平手'
-  return n < 0 ? ('让' + text) : ('受让' + text)
+  if (subName === '大小球') return dxqHandicapText(n)
+  return rqHandicapText(n)
 }
 
 /** 选中玩法显示名 */
@@ -243,6 +243,13 @@ const selectedDisplayName = computed(() => {
     else name = name + ' ' + handicapText(p.handicap, p.side === 'over' || p.side === 'under' ? '大小球' : '让球盘')
   }
   return name
+})
+
+const selectedHandicapCn = computed(() => {
+  const p = selectedPlay.value
+  if (!p._id || p.handicap === undefined || p.handicap === null) return ''
+  if (p.side === 'over' || p.side === 'under') return ''
+  return rqHandicapCn(p.handicap)
 })
 
 const selectedOddsText = computed(() => {
@@ -532,6 +539,7 @@ onUnload(() => {
     border-left: 4rpx solid #1a237e; line-height: 1.2;
     display: flex; align-items: center; gap: 10rpx;
     .rq-hint { font-size: 22rpx; color: #ef6c00; }
+    .rq-hint-cn { font-size: 18rpx; color: #999; margin-left: 6rpx; }
   }
   .play-grid {
     display: grid; gap: 12rpx;
@@ -565,6 +573,7 @@ onUnload(() => {
     .pk-col { font-size: 24rpx; color: #666; }
   }
   .pk-line { font-weight: bold; color: #1a237e; }
+  .pk-cn { font-size: 18rpx; color: #999; font-weight: normal; margin-left: 6rpx; }
   .pk-cell {
     &.selected { background: #e8eaf6; border: 2rpx solid #1a237e; border-radius: 4rpx; }
     &.empty { color: #ddd; }
@@ -599,6 +608,7 @@ onUnload(() => {
     .selected-info {
       flex: 1; min-width: 0;
       .sel-play { font-size: 28rpx; font-weight: bold; color: #1a1a1a; display: block; }
+      .sel-cn { font-size: 20rpx; color: #999; font-weight: normal; margin-left: 6rpx; }
       .sel-odds { font-size: 24rpx; color: #d32f2f; font-weight: bold; }
       .cart-added-text { color: #ef6c00; }
     }
