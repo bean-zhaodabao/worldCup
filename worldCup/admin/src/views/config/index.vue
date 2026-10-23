@@ -40,7 +40,7 @@ const form=reactive({
 
 onMounted(async()=>{loading.value=true;try{const res=await getSystemConfig();const d=res.data;if(d.minBet)form.minBet=parseFloat(d.minBet);if(d.maxBet)form.maxBet=parseFloat(d.maxBet);if(d.matchDays)form.matchDays=parseInt(d.matchDays);if(d.agentCommissionEnabled)form.agentCommissionEnabled=d.agentCommissionEnabled;if(d.agentDefaultRate)form.agentDefaultRate=parseFloat(d.agentDefaultRate);if(d.agentCommissionConfirm)form.agentCommissionConfirm=d.agentCommissionConfirm}catch(e){console.error(e)}loading.value=false})
 
-const doSave=async()=>{saving.value=true;try{await updateSystemConfig({...form});ElMessage.success('配置已保存')}catch(e){ElMessage.error(e.message||'保存失败')};saving.value=false}
+const doSave=async()=>{saving.value=true;try{const res=await updateSystemConfig({...form});const d=res.data||{};if(d.minBet!==undefined)form.minBet=parseFloat(d.minBet);if(d.maxBet!==undefined)form.maxBet=parseFloat(d.maxBet);if(d.matchDays!==undefined)form.matchDays=parseInt(d.matchDays);if(d.agentCommissionEnabled!==undefined)form.agentCommissionEnabled=d.agentCommissionEnabled;if(d.agentDefaultRate!==undefined)form.agentDefaultRate=parseFloat(d.agentDefaultRate);if(d.agentCommissionConfirm!==undefined)form.agentCommissionConfirm=d.agentCommissionConfirm;ElMessage.success('配置已保存')}catch(e){ElMessage.error(e.message||'保存失败')};saving.value=false}
 </script>
 
 <style lang="scss" scoped>

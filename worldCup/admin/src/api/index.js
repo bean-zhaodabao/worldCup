@@ -138,7 +138,7 @@ export function getSystemConfig() {
   return request.get('/admin-config')
 }
 export function updateSystemConfig(data) {
-  return request.put('/admin-config', data)
+  return request.post('/admin-config', data)
 }
 
 // ========== 报表 (admin-report) ==========
