@@ -138,12 +138,14 @@ function buildSportteryPlays(data) {
     })
   }
 
-  // 4. 总进球数区间: 0-1 / 2-3 / 4+ (由官方t0..t7派生)
+  // 4. 总进球数区间: 0-1 / 2-3 / 4-6 / 7+ (由官方t0..t7派生)
+  //    注意: 旧版为 0-1 / 2-3 / 4+(jq:r4), 现按第三方平台口径改为4档
   if (data.jq) {
     const stop = data.jq.stop === true
     push('jq:r01', '0-1球', '总进球数区间', 1, combineOdds([data.jq.t0, data.jq.t1]), { stop })
     push('jq:r23', '2-3球', '总进球数区间', 2, combineOdds([data.jq.t2, data.jq.t3]), { stop })
-    push('jq:r4', '4+球', '总进球数区间', 3, combineOdds([data.jq.t4, data.jq.t5, data.jq.t6, data.jq.t7]), { stop })
+    push('jq:r46', '4-6球', '总进球数区间', 3, combineOdds([data.jq.t4, data.jq.t5, data.jq.t6]), { stop })
+    push('jq:r7', '7+球', '总进球数区间', 4, combineOdds([data.jq.t7]), { stop })
   }
 
   // 5. 半全场 9项
@@ -238,7 +240,10 @@ function computeResult(play, home, guest, halfHome, halfGuest) {
     const total = home + guest
     if (key === 'r01') return (total >= 0 && total <= 1) ? 'win' : 'lose'
     if (key === 'r23') return (total === 2 || total === 3) ? 'win' : 'lose'
-    return total >= 4 ? 'win' : 'lose'
+    if (key === 'r46') return (total >= 4 && total <= 6) ? 'win' : 'lose'
+    if (key === 'r7') return total >= 7 ? 'win' : 'lose'
+    if (key === 'r4') return total >= 4 ? 'win' : 'lose' // 兼容历史 4+球(jq:r4) 订单结算
+    return null
   }
   if (type === 'bqc') {
     if (halfHome === null || halfHome === undefined || halfGuest === null || halfGuest === undefined) return null

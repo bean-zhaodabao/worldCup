@@ -10,7 +10,7 @@
  * 职责:
  *  1. 同步赛事(matches upsert by sourceMatchId, 状态单调推进, 比分/半场比分)
  *  2. 同步7组玩法(胜平负/让球胜平负/比分/总进球区间/半全场/让球盘/大小球)
- *     - 竞彩官方玩法直接映射; 总进球区间(0-1/2-3/4+)由官方t0..t7派生
+ *     - 竞彩官方玩法直接映射; 总进球区间(0-1/2-3/4-6/7+)由官方t0..t7派生
  *     - 亚盘/大小球取 companyId 8/12/14 合并(同盘口去重保留低水位)
  *     - 水位为香港盘: 赢=本金×(1+水位), 内部统一存十进制 odds=1+水位
  *  3. 赔率变化 -> matches.oddsVersion++ (移动端2s轮询自动刷新)
@@ -403,6 +403,22 @@ async function ensureCategories() {
   return catIds
 }
 
+/**
+ * 退役旧版总进球"4+球"(jq:r4)玩法
+ * 只置停售、不删除: user-match 会过滤停售玩法, 移动端不再展示;
+ * 但历史订单可能仍引用该玩法, 结算时按 4+ 语义处理(computeResult 保留 r4 分支)。
+ */
+async function retireLegacyGoalsPlays(stats) {
+  try {
+    const res = await db.collection('plays')
+      .where({ sourceKey: 'jq:r4', stop: cmd.neq(true) })
+      .update({ stop: true, updateTime: new Date() })
+    stats.legacyGoalsStopped = res.updated || 0
+  } catch (e) {
+    stats.errors.push('旧版总进球4+停售失败: ' + (e && e.message || e))
+  }
+}
+
 // ==================== 同步锁与状态 ====================
 
 async function acquireLock() {
@@ -439,7 +455,7 @@ async function doSync() {
   const stats = {
     matchesAdded: 0, matchesUpdated: 0, playsAdded: 0, playsUpdated: 0,
     oddsChangedMatches: 0, settledOrders: 0, refunded: 0, pendingPlays: 0,
-    expiredMatches: 0,
+    expiredMatches: 0, legacyGoalsStopped: 0,
     errors: []
   }
   const oddsChangedMatchIds = new Set()
@@ -447,6 +463,9 @@ async function doSync() {
 
   // 1. 分类映射(缺失自动创建)
   const catIds = await ensureCategories()
+
+  // 1.1 旧版总进球 4+球(jq:r4) 停售, 由 4-6球(jq:r46) / 7+球(jq:r7) 取代
+  await retireLegacyGoalsPlays(stats)
 
   // 2. 拉赛事列表(today/next ≈ 昨天~后天+2)
   const listUrl = BASE + '/i/live/jczq/date/today/next?_=' + Date.now()
