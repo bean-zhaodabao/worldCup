@@ -56,10 +56,10 @@
             <text class="pk-col">{{ sub.name === '让球盘' ? match.teamB : '小球' }}</text>
           </view>
           <view class="pk-row" v-for="row in sub.handicapPlays" :key="row.handicap">
-            <text class="pk-col pk-line">
-              {{ handicapText(row.handicap, sub.name) }}
+            <view class="pk-col pk-line">
+              <text class="pk-num">{{ handicapText(row.handicap, sub.name) }}</text>
               <text class="pk-cn" v-if="sub.name !== '大小球'">{{ rqHandicapCn(row.handicap) }}</text>
-            </text>
+            </view>
             <view class="pk-col pk-cell" v-if="row.home" :class="{ selected: selectedPlay._id === row.home._id }" @click="selectPlay(row.home)">
               <text class="pk-water">{{ fmtOdds(row.home.water || row.home.odds) }}</text>
             </view>
@@ -570,7 +570,11 @@ onUnload(() => {
     background: #f5f5f5;
     .pk-col { font-size: 24rpx; color: #666; }
   }
-  .pk-line { font-weight: bold; color: #1a237e; }
+  .pk-line {
+    flex-direction: column;
+    font-weight: bold; color: #1a237e; line-height: 1.25;
+    .pk-cn { margin-left: 0; margin-top: 4rpx; }
+  }
   .pk-cn { font-size: 18rpx; color: #999; font-weight: normal; margin-left: 6rpx; }
   .pk-cell {
     &.selected { background: #e8eaf6; border: 2rpx solid #1a237e; border-radius: 4rpx; }

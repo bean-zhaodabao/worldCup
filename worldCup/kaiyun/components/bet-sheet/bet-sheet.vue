@@ -25,10 +25,6 @@
 
         <!-- 串关模式：显示多个场次 -->
         <template v-else-if="isParlay">
-          <view class="header-row">
-            <text class="play-name">{{ playList.length }}场串关</text>
-            <text class="odds-tag">赔率 {{ totalOdds }}</text>
-          </view>
           <view class="parlay-matches">
             <view class="parlay-match-item" v-for="(p, i) in playList" :key="p.playId || i">
               <view class="parlay-match-header">
@@ -41,6 +37,18 @@
                   <text class="play-handicap-cn" v-if="playHandicapCn(p)">{{ playHandicapCn(p) }}</text>
                 </text>
                 <text class="parlay-play-odds">@{{ playOddsText(p) }}</text>
+              </view>
+            </view>
+
+            <!-- 串关汇总：场次/赔率/预计可赢，跟随在串关列表尾部 -->
+            <view class="parlay-summary">
+              <view class="parlay-summary-main">
+                <text class="parlay-summary-count">{{ playList.length }}场串关</text>
+                <text class="parlay-summary-odds">@{{ totalOdds }}</text>
+              </view>
+              <view class="parlay-summary-win-row">
+                <text class="parlay-summary-win-label">预计可赢：</text>
+                <text class="parlay-summary-win-value">{{ winAmount }} RMB</text>
               </view>
             </view>
           </view>
@@ -510,11 +518,12 @@ onUnmounted(() => {
   padding: 0 30rpx 20rpx;
   border-bottom: 1rpx solid #f0f0f0;
   .header-row {
-    display: flex; align-items: center; margin-bottom: 8rpx;
+    display: flex; align-items: center; justify-content: space-between; margin-bottom: 8rpx;
     &.sub { margin-bottom: 4rpx; }
   }
-  .play-name { font-size: 34rpx; font-weight: bold; color: #1a1a1a; }
+  .play-name { flex: 1; min-width: 0; font-size: 34rpx; font-weight: bold; color: #1a1a1a; }
   .odds-tag {
+    flex-shrink: 0;
     margin-left: 16rpx; background: #ffebee; color: #d32f2f;
     font-size: 24rpx; padding: 4rpx 16rpx; border-radius: 20rpx; font-weight: bold;
   }
@@ -580,30 +589,49 @@ onUnmounted(() => {
       .parlay-play-odds { font-size: 26rpx; color: #d32f2f; font-weight: bold; }
     }
   }
+
+  // 串关汇总：跟随在列表尾部
+  .parlay-summary {
+    margin-top: 4rpx;
+    padding: 16rpx 16rpx 8rpx;
+    border-top: 1rpx dashed #e0e0e0;
+
+    .parlay-summary-main {
+      display: flex; align-items: baseline;
+      .parlay-summary-count { font-size: 30rpx; font-weight: bold; color: #1a237e; }
+      .parlay-summary-odds { margin-left: 10rpx; font-size: 30rpx; font-weight: bold; color: #2e7d32; }
+    }
+
+    .parlay-summary-win-row {
+      display: flex; align-items: baseline; margin-top: 8rpx;
+      .parlay-summary-win-label { font-size: 24rpx; color: #666; }
+      .parlay-summary-win-value { font-size: 26rpx; font-weight: bold; color: #d32f2f; }
+    }
+  }
 }
 
 // ============ 金额区 ============
 .amount-section {
-  padding: 20rpx 30rpx;
-  .amount-label { font-size: 26rpx; color: #999; margin-bottom: 12rpx; }
+  padding: 16rpx 30rpx;
+  .amount-label { font-size: 26rpx; color: #999; margin-bottom: 10rpx; }
   .amount-display {
-    display: flex; align-items: baseline; padding: 16rpx 0; border-bottom: 2rpx solid #1a237e;
-    .currency { font-size: 36rpx; color: #d32f2f; font-weight: bold; margin-right: 8rpx; }
-    .amount-value { font-size: 44rpx; font-weight: bold; color: #1a1a1a; }
+    display: flex; align-items: baseline; padding: 14rpx 0; border-bottom: 2rpx solid #1a237e;
+    .currency { font-size: 34rpx; color: #d32f2f; font-weight: bold; margin-right: 8rpx; }
+    .amount-value { font-size: 40rpx; font-weight: bold; color: #1a1a1a; }
     .placeholder { color: #ccc; font-size: 28rpx; font-weight: normal; }
   }
 
   .quick-amounts {
-    display: flex; flex-wrap: wrap; gap: 12rpx; margin-top: 20rpx;
+    display: flex; flex-wrap: wrap; gap: 12rpx; margin-top: 16rpx;
     .quick-chip {
-      padding: 12rpx 24rpx; background: #f5f5f5; border-radius: 8rpx;
+      padding: 10rpx 22rpx; background: #f5f5f5; border-radius: 8rpx;
       font-size: 26rpx; color: #666; border: 2rpx solid transparent;
       &.active { border-color: #1a237e; color: #1a237e; background: #e8eaf6; font-weight: bold; }
     }
   }
 
   .multiplier-row {
-    display: flex; align-items: center; margin-top: 20rpx;
+    display: flex; align-items: center; margin-top: 16rpx;
     .multiplier-label { font-size: 26rpx; color: #666; }
     .multiplier-control {
       display: flex; align-items: center; margin: 0 20rpx;
@@ -621,18 +649,18 @@ onUnmounted(() => {
 
 // ============ 数字键盘 ============
 .custom-keypad {
-  background: #f5f5f5; padding: 10rpx 20rpx 20rpx;
+  background: #f5f5f5; padding: 8rpx 20rpx 14rpx;
   .keypad-row {
-    display: flex; gap: 12rpx; margin-bottom: 10rpx;
+    display: flex; gap: 12rpx; margin-bottom: 8rpx;
     .keypad-key {
-      flex: 1; height: 90rpx; display: flex; align-items: center; justify-content: center;
-      background: #fff; border-radius: 12rpx; font-size: 36rpx; font-weight: 500;
+      flex: 1; height: 76rpx; display: flex; align-items: center; justify-content: center;
+      background: #fff; border-radius: 10rpx; font-size: 32rpx; font-weight: 500;
       color: #1a1a1a;
       &:active { background: #e0e0e0; }
-      &.key-delete { background: #e0e0e0; font-size: 28rpx; }
+      &.key-delete { background: #e0e0e0; font-size: 26rpx; }
       &.key-confirm {
         background: linear-gradient(135deg, #1a237e, #0d47a1);
-        color: #fff; font-size: 28rpx; font-weight: bold;
+        color: #fff; font-size: 26rpx; font-weight: bold;
         &:active { opacity: 0.8; }
       }
       &.key-disabled { opacity: 0.5; }
