@@ -4,34 +4,45 @@
       <!-- 拖动条 -->
       <view class="sheet-handle"><view class="handle-bar"></view></view>
 
-      <!-- 头部信息 -->
-      <view class="sheet-header">
-        <!-- 单关模式：显示一场比赛 info -->
-        <template v-if="!isParlay && playList.length === 1">
-          <view class="header-row">
-            <text class="play-name">
-              {{ firstPlayName }}
-              <text class="play-handicap-cn" v-if="firstHandicapCn">{{ firstHandicapCn }}</text>
-            </text>
-            <text class="odds-tag">赔率 {{ singleOddsText }}</text>
-          </view>
-          <view class="header-row sub">
-            <text class="category-text">{{ categoryText }}</text>
-          </view>
-          <view class="header-row teams">
-            <text>{{ matchInfo.teamA }} VS {{ matchInfo.teamB }}</text>
-          </view>
-        </template>
+      <!-- 顶部栏 -->
+      <view class="sheet-topbar">
+        <text class="sheet-title">确认投注</text>
+        <view class="sheet-close" @click="handleMaskClose">×</view>
+      </view>
 
-        <!-- 串关模式：显示多个场次 -->
-        <template v-else-if="isParlay">
-          <view class="parlay-matches">
-            <view class="parlay-match-item" v-for="(p, i) in playList" :key="p.playId || i">
-              <view class="parlay-match-header">
+      <!-- 头部信息卡片 -->
+      <view class="info-card">
+        <view class="info-top">
+          <text class="play-title">
+            {{ isParlay ? '串关投注' : firstPlayName }}
+            <text class="play-handicap-cn" v-if="!isParlay && firstHandicapCn">{{ firstHandicapCn }}</text>
+          </text>
+          <view class="odds-box" v-if="!isParlay">
+            <text class="odds-at">@</text>
+            <text class="odds-num">{{ singleOddsText }}</text>
+          </view>
+        </view>
+
+        <!-- 单关信息 -->
+        <view class="single-info" v-if="!isParlay && playList.length === 1">
+          <view class="accent-bar"></view>
+          <view class="accent-body">
+            <text class="category-text" v-if="categoryText">{{ categoryText }}</text>
+            <text class="teams-text" v-if="matchInfo.teamA || matchInfo.teamB">{{ matchInfo.teamA }} VS {{ matchInfo.teamB }}</text>
+            <text class="league-text" v-if="matchInfo.leagueName || matchInfo.name">{{ matchInfo.leagueName || matchInfo.name }}</text>
+          </view>
+        </view>
+
+        <!-- 串关场次 -->
+        <view class="parlay-list" v-else-if="isParlay">
+          <view class="parlay-item" v-for="(p, i) in playList" :key="p.playId || i">
+            <view class="parlay-item-accent"></view>
+            <view class="parlay-item-main">
+              <view class="parlay-item-top">
                 <text class="parlay-match-name">{{ p.teamA }} VS {{ p.teamB }}</text>
-                <text class="play-tag-remove" @click="removePlay(i)">×</text>
+                <view class="remove-btn" @click="removePlay(i)">×</view>
               </view>
-              <view class="parlay-play-row">
+              <view class="parlay-item-bottom">
                 <text class="parlay-play-name">
                   {{ playDisplayName(p) }}
                   <text class="play-handicap-cn" v-if="playHandicapCn(p)">{{ playHandicapCn(p) }}</text>
@@ -39,35 +50,46 @@
                 <text class="parlay-play-odds">@{{ playOddsText(p) }}</text>
               </view>
             </view>
+          </view>
 
-            <!-- 串关汇总：场次/赔率/预计可赢，跟随在串关列表尾部 -->
-            <view class="parlay-summary">
-              <view class="parlay-summary-main">
-                <text class="parlay-summary-count">{{ playList.length }}场串关</text>
-                <text class="parlay-summary-odds">@{{ totalOdds }}</text>
-              </view>
-              <view class="parlay-summary-win-row">
-                <text class="parlay-summary-win-label">预计可赢：</text>
-                <text class="parlay-summary-win-value">{{ winAmount }} RMB</text>
-              </view>
+          <view class="parlay-summary">
+            <view class="parlay-summary-head">
+              <text class="parlay-summary-count">串关 {{ playList.length }} 场</text>
+              <text class="parlay-summary-odds">@{{ totalOdds }}</text>
+            </view>
+            <view class="parlay-summary-win-row">
+              <text class="parlay-summary-label">预计可赢</text>
+              <text class="parlay-summary-win">¥{{ winAmount }}</text>
             </view>
           </view>
-        </template>
+        </view>
 
-        <!-- 实时赔率提示 -->
-        <view class="header-row sub">
-          <text class="realtime-hint">提交时按系统实时赔率下单</text>
+        <!-- 底部提示 + 注数 -->
+        <view class="info-footer">
+          <view class="realtime-row">
+            <view class="realtime-dot">i</view>
+            <text class="realtime-hint">提交时按系统实时赔率下单</text>
+          </view>
+          <view class="count-badge">{{ playList.length }}</view>
         </view>
       </view>
 
       <!-- 金额输入区 -->
       <view class="amount-section">
-        <view class="amount-label">下注金额 (RMB)</view>
-        <view class="amount-display">
-          <text class="currency">¥</text>
-          <text class="amount-value" :class="{ placeholder: !displayAmount }">
-            {{ displayAmount || '请输入金额' }}
-          </text>
+        <view class="amount-head">
+          <text class="amount-label">下注金额</text>
+        </view>
+
+        <view class="amount-row">
+          <view class="amount-field">
+            <text class="amount-value" :class="{ placeholder: !displayAmount }">{{ displayAmount || '0.00' }}</text>
+            <view class="amount-caret"></view>
+            <text class="amount-unit">RMB</text>
+          </view>
+          <view class="clear-btn" @click="clearAmount">
+            <text class="clear-icon">×</text>
+            <text>清空</text>
+          </view>
         </view>
 
         <!-- 快捷金额 -->
@@ -76,22 +98,22 @@
             class="quick-chip"
             v-for="amt in quickAmounts"
             :key="amt"
-            :class="{ active: inputAmount === amt }"
+            :class="{ active: inputAmount === String(amt) }"
             @click="setQuickAmount(amt)"
           >
             {{ amt }}
           </view>
         </view>
 
-        <!-- 倍数选择 -->
+        <!-- 倍数 -->
         <view class="multiplier-row">
           <text class="multiplier-label">倍数</text>
           <view class="multiplier-control">
-            <view class="mult-btn" @click="changeMultiplier(-1)">-</view>
+            <view class="mult-btn" @click="changeMultiplier(-1)">−</view>
             <text class="mult-value">{{ multiplier }}</text>
             <view class="mult-btn" @click="changeMultiplier(1)">+</view>
           </view>
-          <text class="mult-hint">买{{ multiplier }}倍</text>
+          <text class="mult-hint">买 {{ multiplier }} 倍</text>
         </view>
       </view>
 
@@ -109,21 +131,20 @@
             }"
             @click="onKeyPress(key)"
           >
-            <text v-if="key.type === 'delete'">⌫</text>
+            <text v-if="key.type === 'delete'" class="key-icon">⌫</text>
             <text v-else-if="key.type === 'confirm'">确定</text>
             <text v-else>{{ key.value }}</text>
           </view>
         </view>
       </view>
 
-      <!-- 下单失败原因（接口返回的 message，紧贴提交按钮持续展示，避免 toast 被弹层遮挡而看不到） -->
-      <view class="sheet-error" v-if="errorText && !isLoading">
-        <text class="sheet-error-icon">!</text>
-        <text class="sheet-error-text">{{ errorText }}</text>
-      </view>
-
       <!-- 滑动提交按钮 -->
       <view class="slide-submit-wrapper">
+        <!-- 下单失败原因（接口返回的 message，紧贴提交按钮持续展示，避免 toast 被弹层遮挡而看不到） -->
+        <view class="sheet-error" v-if="errorText && !isLoading">
+          <text class="sheet-error-icon">!</text>
+          <text class="sheet-error-text">{{ errorText }}</text>
+        </view>
         <view
           class="slide-track"
           :class="{ 'slide-loading': isLoading, 'slide-disabled': !canSubmit }"
@@ -140,17 +161,18 @@
             <view class="slide-spinner"></view>
             <text>正在提交，请稍候…</text>
           </view>
+          <view v-if="!isLoading" class="slide-chevrons">›››</view>
           <view
             v-if="!isLoading"
             class="slide-thumb"
-            :style="{ left: slideLeft + 'px' }"
+            :style="{ left: (slideLeft + thumbMargin) + 'px' }"
           >
             <text class="slide-arrow">→</text>
           </view>
           <view
             v-else
             class="slide-thumb slide-thumb-loading"
-            :style="{ left: slideMaxWidth + 'px' }"
+            :style="{ left: (slideMaxWidth + thumbMargin) + 'px' }"
           >
             <view class="slide-spinner slide-spinner-dark"></view>
           </view>
@@ -286,7 +308,7 @@ const winAmount = computed(() => {
 
 const slideText = computed(() => {
   const w = winAmount.value
-  return parseFloat(w) > 0 ? ('可赢 ¥' + w + '  ››› 滑动确认') : '请输入金额后滑动确认'
+  return parseFloat(w) > 0 ? ('滑动投注 · 可赢 ¥' + w) : '请输入金额'
 })
 
 const canSubmit = computed(() => {
@@ -348,6 +370,10 @@ const setQuickAmount = (amt) => {
   inputAmount.value = String(amt)
 }
 
+const clearAmount = () => {
+  inputAmount.value = ''
+}
+
 const changeMultiplier = (delta) => {
   const newVal = multiplier.value + delta
   if (newVal >= 1 && newVal <= 99) {
@@ -370,6 +396,7 @@ const removePlay = (index) => {
 const slideLeft = ref(0)
 const slideProgress = ref(0)
 const slideMaxWidth = ref(300)
+const thumbMargin = 8
 const submitting = ref(false)
 const isLoading = computed(() => submitting.value || props.loading)
 let startX = 0
@@ -391,7 +418,7 @@ const onSlideStart = (e) => {
   const query = uni.createSelectorQuery().in(instance)
   query.select('.slide-track').boundingClientRect(rect => {
     if (rect) {
-      trackWidth = rect.width - 44
+      trackWidth = rect.width - 34 - thumbMargin * 2
       slideMaxWidth.value = trackWidth
     }
   }).exec()
@@ -486,19 +513,22 @@ onUnmounted(() => {
 <style lang="scss" scoped>
 .bet-sheet-mask {
   position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0,0,0,0.5); z-index: 1000;
+  background: rgba(15, 23, 42, 0.55);
+  z-index: 1000;
   display: flex; align-items: flex-end;
   // 阻止滚动手势穿透到背后的页面
   overscroll-behavior: none;
 }
 
 .bet-sheet {
-  width: 100%; background: #fff; border-radius: 24rpx 24rpx 0 0;
-  max-height: 85vh; overflow-y: auto;
+  width: 100%; max-height: 88vh; overflow-y: auto;
+  background: #f4f6fa;
+  border-radius: 32rpx 32rpx 0 0;
+  box-shadow: 0 -12rpx 40rpx rgba(15, 23, 42, 0.16);
   // 弹层内部滚动到边界时不要让背景页面接着滚(滚动链传导)
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
-  animation: slideUp 0.25s ease-out;
+  animation: slideUp 0.26s cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
 @keyframes slideUp {
@@ -507,207 +537,358 @@ onUnmounted(() => {
 }
 
 .sheet-handle {
-  display: flex; justify-content: center; padding: 16rpx;
+  display: flex; justify-content: center; padding: 16rpx 0 6rpx;
   .handle-bar {
-    width: 60rpx; height: 8rpx; background: #ddd; border-radius: 4rpx;
+    width: 64rpx; height: 6rpx; background: #d5dae3; border-radius: 3rpx;
   }
 }
 
-// ============ 头部 ============
-.sheet-header {
-  padding: 0 30rpx 20rpx;
-  border-bottom: 1rpx solid #f0f0f0;
-  .header-row {
-    display: flex; align-items: center; justify-content: space-between; margin-bottom: 8rpx;
-    &.sub { margin-bottom: 4rpx; }
+.sheet-topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 4rpx 24rpx 18rpx;
+  .sheet-title {
+    font-size: 32rpx; font-weight: bold; color: #1f2937; letter-spacing: 0.5rpx;
   }
-  .play-name { flex: 1; min-width: 0; font-size: 34rpx; font-weight: bold; color: #1a1a1a; }
-  .odds-tag {
-    flex-shrink: 0;
-    margin-left: 16rpx; background: #ffebee; color: #d32f2f;
-    font-size: 24rpx; padding: 4rpx 16rpx; border-radius: 20rpx; font-weight: bold;
-  }
-  .category-text { font-size: 24rpx; color: #999; }
-  .teams { font-size: 26rpx; color: #666; margin-top: 8rpx; }
-  .realtime-hint {
-    font-size: 22rpx; color: #ef6c00; background: #fff3e0;
-    padding: 4rpx 14rpx; border-radius: 12rpx;
+  .sheet-close {
+    width: 56rpx; height: 56rpx; border-radius: 50%;
+    background: #e9edf4; color: #7b8494;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 36rpx; line-height: 1;
+    &:active { opacity: 0.7; }
   }
 }
 
-// 下单失败提示
-.sheet-error {
-  display: flex;
-  align-items: flex-start;
-  margin: 16rpx 30rpx 0;
-  padding: 16rpx 20rpx;
-  background: #ffebee;
-  border: 1rpx solid #ffcdd2;
-  border-radius: 12rpx;
+// ============ 头部信息卡片 ============
+.info-card {
+  margin: 0 24rpx;
+  padding: 26rpx 26rpx 20rpx;
+  background: #fff;
+  border-radius: 22rpx;
+  box-shadow: 0 6rpx 24rpx rgba(17, 24, 39, 0.05);
+}
 
-  .sheet-error-icon {
-    flex-shrink: 0;
-    width: 32rpx; height: 32rpx;
-    margin-right: 12rpx;
-    border-radius: 50%;
-    background: #d32f2f;
-    color: #fff;
-    font-size: 24rpx; font-weight: bold;
-    line-height: 32rpx; text-align: center;
+.info-top {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  .play-title {
+    flex: 1; min-width: 0; padding-right: 16rpx;
+    font-size: 36rpx; font-weight: bold; color: #1f2937;
+    line-height: 1.35;
   }
-
-  .sheet-error-text {
-    flex: 1;
-    font-size: 26rpx;
-    line-height: 32rpx;
-    color: #c62828;
-    word-break: break-all;
+  .odds-box {
+    flex-shrink: 0; display: flex; align-items: baseline;
+    .odds-at { font-size: 24rpx; color: #9aa3b2; margin-right: 2rpx; }
+    .odds-num {
+      font-size: 42rpx; font-weight: bold; color: #1f2937;
+      letter-spacing: -0.5rpx;
+    }
   }
 }
 
 // 让球中文盘口小字后缀
 .play-handicap-cn {
-  font-size: 20rpx; color: #999; font-weight: normal; margin-left: 6rpx;
+  font-size: 20rpx; color: #9aa3b2; font-weight: normal; margin-left: 6rpx;
+}
+
+.single-info {
+  display: flex; margin-top: 20rpx;
+  .accent-bar {
+    width: 6rpx; border-radius: 3rpx; background: #2f6cf6; flex-shrink: 0;
+  }
+  .accent-body {
+    display: flex; flex-direction: column; padding-left: 18rpx;
+    .category-text { font-size: 25rpx; color: #7b8494; }
+    .teams-text {
+      margin-top: 8rpx; font-size: 28rpx; color: #1f2937; font-weight: 500;
+    }
+    .league-text { margin-top: 6rpx; font-size: 23rpx; color: #9aa3b2; }
+  }
 }
 
 // 串关场次列表
-.parlay-matches {
-  margin-top: 12rpx;
-  .parlay-match-item {
-    background: #f8f9fa; border-radius: 12rpx; padding: 14rpx 16rpx; margin-bottom: 10rpx;
-    .parlay-match-header {
-      display: flex; justify-content: space-between; align-items: center;
-      .parlay-match-name { font-size: 26rpx; font-weight: bold; color: #1a237e; }
-      .play-tag-remove {
-        color: #999; font-size: 32rpx; padding: 4rpx 12rpx;
-        &:active { color: #d32f2f; }
-      }
+.parlay-list {
+  margin-top: 20rpx;
+  .parlay-item {
+    display: flex; margin-bottom: 12rpx; padding: 16rpx 18rpx;
+    background: #f7f9fc; border-radius: 14rpx;
+    &:last-child { margin-bottom: 0; }
+    .parlay-item-accent {
+      width: 6rpx; border-radius: 3rpx; background: #2f6cf6; flex-shrink: 0;
     }
-    .parlay-play-row {
-      display: flex; justify-content: space-between; align-items: center; margin-top: 8rpx;
-      .parlay-play-name { font-size: 24rpx; color: #666; }
-      .parlay-play-odds { font-size: 26rpx; color: #d32f2f; font-weight: bold; }
+    .parlay-item-main { flex: 1; min-width: 0; padding-left: 16rpx; }
+  }
+  .parlay-item-top {
+    display: flex; align-items: center; justify-content: space-between;
+    .parlay-match-name { font-size: 27rpx; font-weight: bold; color: #1f2937; }
+    .remove-btn {
+      width: 40rpx; height: 40rpx; border-radius: 50%;
+      background: #e9edf4; color: #8b93a1;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 28rpx; line-height: 1;
+      &:active { background: #ffe8e8; color: #d64545; }
     }
   }
+  .parlay-item-bottom {
+    display: flex; align-items: baseline; justify-content: space-between;
+    margin-top: 8rpx;
+    .parlay-play-name { font-size: 25rpx; color: #7b8494; }
+    .parlay-play-odds { font-size: 27rpx; font-weight: bold; color: #2f6cf6; }
+  }
 
-  // 串关汇总：跟随在列表尾部
+  // 串关汇总
   .parlay-summary {
-    margin-top: 4rpx;
-    padding: 16rpx 16rpx 8rpx;
-    border-top: 1rpx dashed #e0e0e0;
-
-    .parlay-summary-main {
-      display: flex; align-items: baseline;
-      .parlay-summary-count { font-size: 30rpx; font-weight: bold; color: #1a237e; }
-      .parlay-summary-odds { margin-left: 10rpx; font-size: 30rpx; font-weight: bold; color: #2e7d32; }
+    margin-top: 12rpx; padding: 16rpx 18rpx;
+    background: #eef5ff; border-radius: 12rpx;
+    .parlay-summary-head {
+      display: flex; align-items: baseline; justify-content: space-between;
+      .parlay-summary-count { font-size: 28rpx; font-weight: bold; color: #1f2937; }
+      .parlay-summary-odds { font-size: 30rpx; font-weight: bold; color: #2f6cf6; }
     }
-
     .parlay-summary-win-row {
-      display: flex; align-items: baseline; margin-top: 8rpx;
-      .parlay-summary-win-label { font-size: 24rpx; color: #666; }
-      .parlay-summary-win-value { font-size: 26rpx; font-weight: bold; color: #d32f2f; }
+      display: flex; align-items: baseline; justify-content: space-between;
+      margin-top: 8rpx;
+      .parlay-summary-label { font-size: 24rpx; color: #5c6b84; }
+      .parlay-summary-win { font-size: 30rpx; font-weight: bold; color: #2f6cf6; }
     }
+  }
+}
+
+.info-footer {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-top: 20rpx;
+  .realtime-row {
+    display: flex; align-items: center; min-width: 0;
+    .realtime-dot {
+      width: 30rpx; height: 30rpx; border-radius: 50%;
+      background: #eaf2ff; color: #2f6cf6;
+      font-size: 20rpx; font-weight: bold;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; margin-right: 10rpx;
+    }
+    .realtime-hint { font-size: 23rpx; color: #8b93a1; }
+  }
+  .count-badge {
+    flex-shrink: 0; min-width: 44rpx; height: 44rpx; padding: 0 10rpx;
+    border-radius: 22rpx; background: #eef1f7; color: #6b7280;
+    font-size: 23rpx; font-weight: 600;
+    display: flex; align-items: center; justify-content: center;
   }
 }
 
 // ============ 金额区 ============
 .amount-section {
-  padding: 16rpx 30rpx;
-  .amount-label { font-size: 26rpx; color: #999; margin-bottom: 10rpx; }
-  .amount-display {
-    display: flex; align-items: baseline; padding: 14rpx 0; border-bottom: 2rpx solid #1a237e;
-    .currency { font-size: 34rpx; color: #d32f2f; font-weight: bold; margin-right: 8rpx; }
-    .amount-value { font-size: 40rpx; font-weight: bold; color: #1a1a1a; }
-    .placeholder { color: #ccc; font-size: 28rpx; font-weight: normal; }
+  padding: 22rpx 24rpx 0;
+  .amount-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 14rpx;
+    .amount-label { font-size: 26rpx; font-weight: 600; color: #4b5563; }
   }
+}
 
-  .quick-amounts {
-    display: flex; flex-wrap: wrap; gap: 12rpx; margin-top: 16rpx;
-    .quick-chip {
-      padding: 10rpx 22rpx; background: #f5f5f5; border-radius: 8rpx;
-      font-size: 26rpx; color: #666; border: 2rpx solid transparent;
-      &.active { border-color: #1a237e; color: #1a237e; background: #e8eaf6; font-weight: bold; }
-    }
+.amount-row { display: flex; gap: 16rpx; }
+
+.amount-field {
+  flex: 1; min-width: 0; height: 96rpx;
+  display: flex; align-items: center;
+  padding: 0 22rpx;
+  background: #fff; border: 1rpx solid #e1e7f0;
+  border-radius: 16rpx;
+  box-shadow: inset 0 2rpx 4rpx rgba(17, 24, 39, 0.02);
+  .amount-value {
+    font-size: 44rpx; font-weight: bold; color: #1f2937;
+    letter-spacing: 0.5rpx;
   }
+  .placeholder { color: #c1c7d2; font-weight: 500; }
+  .amount-caret {
+    width: 3rpx; height: 38rpx; margin-left: 4rpx;
+    background: #2f6cf6; border-radius: 2rpx;
+    animation: caretBlink 1s step-end infinite;
+  }
+  .amount-unit {
+    margin-left: auto; padding-left: 12rpx;
+    font-size: 24rpx; color: #9aa3b2;
+  }
+}
 
-  .multiplier-row {
-    display: flex; align-items: center; margin-top: 16rpx;
-    .multiplier-label { font-size: 26rpx; color: #666; }
-    .multiplier-control {
-      display: flex; align-items: center; margin: 0 20rpx;
-      .mult-btn {
-        width: 56rpx; height: 56rpx; border: 2rpx solid #ddd;
-        border-radius: 50%; display: flex; align-items: center; justify-content: center;
-        font-size: 32rpx; color: #333;
-        &:active { background: #f0f0f0; }
+@keyframes caretBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.clear-btn {
+  flex-shrink: 0; width: 150rpx; height: 96rpx;
+  display: flex; align-items: center; justify-content: center; gap: 4rpx;
+  background: linear-gradient(135deg, #2f6cf6, #1e4fd0);
+  color: #fff; font-size: 26rpx; font-weight: 600;
+  border-radius: 16rpx;
+  box-shadow: 0 8rpx 18rpx rgba(47, 108, 246, 0.24);
+  &:active { opacity: 0.85; }
+  .clear-icon { font-size: 30rpx; line-height: 1; font-weight: 400; }
+}
+
+.quick-amounts {
+  display: flex; gap: 10rpx; margin-top: 18rpx;
+  .quick-chip {
+    flex: 1; height: 72rpx;
+    display: flex; align-items: center; justify-content: center;
+    background: #fff; border: 1rpx solid #e1e7f0; border-radius: 14rpx;
+    font-size: 25rpx; font-weight: 500; color: #2f6cf6;
+    position: relative; overflow: hidden; box-sizing: border-box;
+    &:active { background: #f3f8ff; }
+    &.active {
+      border-color: #2f6cf6; background: #f3f8ff; font-weight: bold;
+      &::after {
+        content: ''; position: absolute; right: 0; bottom: 0;
+        width: 0; height: 0;
+        border-left: 16rpx solid transparent;
+        border-bottom: 16rpx solid #2f6cf6;
       }
-      .mult-value { font-size: 36rpx; font-weight: bold; margin: 0 30rpx; color: #1a237e; }
     }
-    .mult-hint { font-size: 24rpx; color: #d32f2f; }
   }
+}
+
+.multiplier-row {
+  display: flex; align-items: center;
+  margin-top: 18rpx; padding: 14rpx 20rpx;
+  background: #fff; border-radius: 16rpx;
+  box-shadow: 0 2rpx 10rpx rgba(17, 24, 39, 0.03);
+  .multiplier-label { font-size: 25rpx; color: #6b7280; }
+  .multiplier-control {
+    display: flex; align-items: center; margin-left: 24rpx;
+    .mult-btn {
+      width: 56rpx; height: 56rpx; border-radius: 50%;
+      background: #f2f6ff; color: #2f6cf6;
+      font-size: 34rpx; font-weight: 500;
+      display: flex; align-items: center; justify-content: center;
+      &:active { background: #e3edff; }
+    }
+    .mult-value {
+      min-width: 72rpx; text-align: center;
+      font-size: 34rpx; font-weight: bold; color: #1f2937;
+    }
+  }
+  .mult-hint { margin-left: auto; font-size: 24rpx; color: #8b93a1; }
 }
 
 // ============ 数字键盘 ============
 .custom-keypad {
-  background: #f5f5f5; padding: 8rpx 20rpx 14rpx;
+  padding: 16rpx 24rpx 2rpx;
   .keypad-row {
-    display: flex; gap: 12rpx; margin-bottom: 8rpx;
+    display: flex; gap: 12rpx; margin-bottom: 12rpx;
     .keypad-key {
-      flex: 1; height: 76rpx; display: flex; align-items: center; justify-content: center;
-      background: #fff; border-radius: 10rpx; font-size: 32rpx; font-weight: 500;
-      color: #1a1a1a;
-      &:active { background: #e0e0e0; }
-      &.key-delete { background: #e0e0e0; font-size: 26rpx; }
-      &.key-confirm {
-        background: linear-gradient(135deg, #1a237e, #0d47a1);
-        color: #fff; font-size: 26rpx; font-weight: bold;
-        &:active { opacity: 0.8; }
+      flex: 1; height: 74rpx;
+      display: flex; align-items: center; justify-content: center;
+      background: #fff; border-radius: 14rpx;
+      font-size: 32rpx; font-weight: 500; color: #1f2937;
+      box-shadow: 0 2rpx 8rpx rgba(17, 24, 39, 0.04);
+      &:active { background: #eaf0fb; }
+      &.key-delete {
+        background: #e9edf4; color: #5b6575; font-size: 28rpx;
+        box-shadow: none;
+        .key-icon { font-size: 30rpx; }
       }
-      &.key-disabled { opacity: 0.5; }
+      &.key-confirm {
+        background: linear-gradient(135deg, #2f6cf6, #1e4fd0);
+        color: #fff; font-size: 26rpx; font-weight: bold;
+        box-shadow: none;
+        &:active { opacity: 0.85; }
+      }
+      &.key-disabled { opacity: 0.45; }
     }
+  }
+}
+
+// 下单失败提示
+.sheet-error {
+  display: flex; align-items: flex-start;
+  margin: 0 0 16rpx;
+  padding: 16rpx 18rpx;
+  background: #fff1f2;
+  border: 1rpx solid #ffd6d9;
+  border-radius: 14rpx;
+
+  .sheet-error-icon {
+    flex-shrink: 0;
+    width: 30rpx; height: 30rpx;
+    margin-right: 10rpx;
+    border-radius: 50%;
+    background: #e04b4b;
+    color: #fff;
+    font-size: 22rpx; font-weight: bold;
+    line-height: 30rpx; text-align: center;
+  }
+
+  .sheet-error-text {
+    flex: 1;
+    font-size: 24rpx;
+    line-height: 34rpx;
+    color: #c53030;
+    word-break: break-all;
   }
 }
 
 // ============ 滑动提交按钮 ============
 .slide-submit-wrapper {
-  padding: 20rpx 80rpx 40rpx;
+  position: sticky; bottom: 0; z-index: 6;
+  padding: 24rpx 24rpx 32rpx;
+  padding-bottom: calc(32rpx + constant(safe-area-inset-bottom));
+  padding-bottom: calc(32rpx + env(safe-area-inset-bottom));
+  background: #f4f6fa;
 }
 
 .slide-track {
   position: relative;
-  height: 90rpx;
-  background: #e0e0e0;
-  border-radius: 45rpx;
+  height: 100rpx;
+  background: linear-gradient(135deg, #2f6cf6, #1e4fd0);
+  border-radius: 50rpx;
   overflow: hidden;
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
+  box-shadow: 0 10rpx 24rpx rgba(47, 108, 246, 0.28);
   // 拖动滑块时禁止浏览器接管手势（避免页面跟着滚动）
   touch-action: none;
 
-  &.slide-disabled .slide-bg-text { color: #bbb; }
+  &.slide-disabled {
+    background: #e5e9f0;
+    box-shadow: none;
+    .slide-bg-text { color: #a0a7b4; }
+    .slide-chevrons { color: #c3c9d4; }
+    .slide-thumb {
+      box-shadow: none;
+      .slide-arrow { color: #b3bac6; }
+    }
+  }
+
   &.slide-loading {
-    background: #2e7d32;
+    background: linear-gradient(135deg, #2f6cf6, #1e4fd0);
     animation: slideGlow 1.4s ease-in-out infinite;
   }
 }
 
 @keyframes slideGlow {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.35); }
-  50% { box-shadow: 0 0 0 10rpx rgba(76, 175, 80, 0.12); }
+  0%, 100% { box-shadow: 0 10rpx 24rpx rgba(47, 108, 246, 0.28); }
+  50% { box-shadow: 0 10rpx 34rpx rgba(47, 108, 246, 0.46); }
 }
 
 .slide-bg-text {
-  font-size: 26rpx; color: #999; z-index: 4;
-  white-space: nowrap; overflow: hidden;
-  padding: 0 20rpx;
+  position: relative; z-index: 4;
+  margin-left: 100rpx; padding-right: 74rpx;
+  font-size: 27rpx; font-weight: 600; color: #fff;
+  letter-spacing: 0.5rpx;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
 .slide-loading-text {
   display: flex; align-items: center; justify-content: center;
-  z-index: 4; padding: 0 24rpx;
+  z-index: 4; padding: 0 24rpx; margin-left: 80rpx;
   font-size: 26rpx; color: #fff; font-weight: bold;
   text { margin-left: 12rpx; }
+}
+
+.slide-chevrons {
+  position: absolute; right: 28rpx; top: 50%; transform: translateY(-50%);
+  z-index: 4; font-size: 28rpx; letter-spacing: 2rpx;
+  color: rgba(255, 255, 255, 0.75);
 }
 
 // 加载转圈
@@ -718,7 +899,10 @@ onUnmounted(() => {
   border-radius: 50%;
   animation: slideSpin 0.7s linear infinite;
 
-  &.slide-spinner-dark { border-color: rgba(76, 175, 80, 0.25); border-top-color: #4caf50; }
+  &.slide-spinner-dark {
+    border-color: rgba(47, 108, 246, 0.2);
+    border-top-color: #2f6cf6;
+  }
 }
 
 @keyframes slideSpin {
@@ -727,25 +911,25 @@ onUnmounted(() => {
 
 .slide-progress {
   position: absolute; left: 0; top: 0; height: 100%;
-  background: linear-gradient(135deg, #4caf50, #2e7d32);
-  border-radius: 45rpx; transition: width 0.05s linear; z-index: 2;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 50rpx; transition: width 0.05s linear; z-index: 2;
 }
 
 .slide-thumb {
   position: absolute; top: 50%; transform: translateY(-50%);
-  width: 80rpx; height: 80rpx; background: #fff;
+  width: 68rpx; height: 68rpx; background: #fff;
   border-radius: 50%; z-index: 3;
   display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 4rpx 12rpx rgba(0,0,0,0.2);
+  box-shadow: 0 4rpx 12rpx rgba(15, 23, 42, 0.18);
   transition: left 0.05s linear;
 
   .slide-arrow {
-    font-size: 36rpx; color: #4caf50; font-weight: bold;
+    font-size: 30rpx; color: #2f6cf6; font-weight: bold; line-height: 1;
   }
 
   &.slide-thumb-loading {
     transition: left 0.2s ease-out;
-    box-shadow: 0 4rpx 16rpx rgba(0,0,0,0.25);
+    box-shadow: 0 4rpx 16rpx rgba(15, 23, 42, 0.2);
   }
 }
 

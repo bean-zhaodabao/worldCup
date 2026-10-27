@@ -48,25 +48,48 @@ exports.main = async (event, context) => {
         .limit(pageSize)
         .get()
 
-      const list = await Promise.all((res.data || []).map(async order => {
-        const items = await db.collection('order-items').where({ orderId: order._id }).get()
+      const orderRows = res.data || []
+      const orderIds = orderRows.map(o => o._id)
+      const allMatchIds = [...new Set(orderRows.reduce((ids, o) => {
+        return ids.concat(o.matchIds || (o.matchId ? [o.matchId] : []))
+      }, []))]
 
+      // 批量读取明细与赛事, 避免订单多时逐单查询过慢
+      const [itemsRes, matchesRes] = await Promise.all([
+        orderIds.length
+          ? db.collection('order-items').where({ orderId: cmd.in(orderIds) }).limit(1000).get()
+          : Promise.resolve({ data: [] }),
+        allMatchIds.length
+          ? db.collection('matches').where({ _id: cmd.in(allMatchIds) }).limit(1000).get()
+          : Promise.resolve({ data: [] })
+      ])
+
+      const itemsByOrder = {}
+      for (const item of itemsRes.data || []) {
+        if (!itemsByOrder[item.orderId]) itemsByOrder[item.orderId] = []
+        itemsByOrder[item.orderId].push(item)
+      }
+      const matchMap = {}
+      for (const m of matchesRes.data || []) matchMap[m._id] = m
+
+      const list = orderRows.map(order => {
         const matchIds = order.matchIds || (order.matchId ? [order.matchId] : [])
-        const matchesData = []
-        for (const mId of matchIds) {
-          const match = await db.collection('matches').doc(mId).get()
-          const mData = (match.data && match.data[0]) || {}
-          if (mData._id) {
-            matchesData.push({
-              _id: mData._id,
-              name: mData.name || '',
-              teamA: mData.teamA || '',
-              teamB: mData.teamB || ''
-            })
-          }
-        }
+        const matchesData = matchIds.map(mId => matchMap[mId]).filter(Boolean).map(mData => ({
+          _id: mData._id,
+          name: mData.name || '',
+          leagueName: mData.leagueName || '',
+          teamA: mData.teamA || '',
+          teamB: mData.teamB || '',
+          startTime: mData.startTime || null,
+          status: mData.status || '',
+          displayState: mData.displayState || '',
+          homeScore: mData.homeScore,
+          guestScore: mData.guestScore,
+          homeHalfScore: mData.homeHalfScore,
+          guestHalfScore: mData.guestHalfScore
+        }))
 
-        const itemsWithMatch = (items.data || []).map(item => {
+        const itemsWithMatch = (itemsByOrder[order._id] || []).map(item => {
           const relatedMatch = matchesData.find(m => m._id === item.matchId)
           return {
             ...item,
@@ -84,7 +107,7 @@ exports.main = async (event, context) => {
           matches: matchesData,
           items: itemsWithMatch
         }
-      }))
+      })
 
       return success({ list, total: total.total })
     }
