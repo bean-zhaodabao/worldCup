@@ -5,6 +5,39 @@
       <text>数据更新时间: {{ syncTimeText }}</text>
     </view>
 
+    <!-- 正在直播(斗球直播源) -->
+    <view class="live-strip" v-if="liveGroups.length">
+      <view class="live-strip-head">
+        <view class="live-strip-title">
+          <text class="live-dot on"></text>
+          <text>正在直播</text>
+        </view>
+        <text class="live-strip-sub">足球 · {{ liveGroups.length }} 场</text>
+      </view>
+      <scroll-view scroll-x class="live-scroll" :show-scrollbar="false">
+        <view
+          class="live-card"
+          v-for="g in liveGroups"
+          :key="g.doveMatchId"
+          @click="goLiveGroup(g)"
+        >
+          <view class="live-card-top">
+            <text class="live-league">{{ g.leagueName || '足球' }}</text>
+            <text class="live-hot" v-if="g.hot">{{ hotText(g.hot) }}人气</text>
+          </view>
+          <view class="live-teams">
+            <text class="live-team">{{ g.hostTeamName }}</text>
+            <text class="live-vs">VS</text>
+            <text class="live-team">{{ g.guestTeamName }}</text>
+          </view>
+          <view class="live-card-bottom">
+            <text class="live-room-count">{{ g.rooms.length }} 个直播间</text>
+            <text class="live-watch-btn">观看直播 ›</text>
+          </view>
+        </view>
+      </scroll-view>
+    </view>
+
     <!-- 按日期分组 -->
     <view class="date-group" v-for="group in dateGroups" :key="group.key">
       <view class="date-header">
@@ -31,6 +64,23 @@
             <image class="flag" :src="match.teamBFlag || '/static/football.png'" mode="aspectFit"></image>
             <text class="team-name">{{ match.teamB }}</text>
           </view>
+        </view>
+        <!-- 该场次的直播入口 -->
+        <view
+          class="live-bar"
+          v-if="liveMap[match._id]"
+          @click.stop="goLiveMatch(match, liveMap[match._id])"
+        >
+          <view class="live-bar-left">
+            <text class="live-dot" :class="{ on: liveMap[match._id].isLive }"></text>
+            <text class="live-bar-text">{{ liveMap[match._id].isLive ? '直播中' : '有直播' }}</text>
+            <text class="live-bar-sub">
+              {{ liveMap[match._id].rooms.length > 1
+                ? liveMap[match._id].rooms.length + ' 个直播间'
+                : (liveMap[match._id].rooms[0] && liveMap[match._id].rooms[0].nickName) || '' }}
+            </text>
+          </view>
+          <text class="live-bar-action">观看直播 ›</text>
         </view>
         <!-- 胜平负赔率简览 -->
         <view class="spf-row" v-if="spfOf(match).length">
@@ -93,6 +143,14 @@ const showCartSheet = ref(false)
 const cartSubmitting = ref(false)
 const cartError = ref('')
 
+// 直播: matchId -> 该场次的斗球直播间信息；liveGroups = 当前正在直播的足球场次
+const LIVE_REFRESH_MS = 2 * 60 * 1000
+const liveMap = ref({})
+const liveGroups = ref([])
+let liveLoadedAt = 0
+let liveRetryAt = 0
+let liveTimer = null
+
 const cartCount = computed(() => betCart.count)
 const cartTotalOdds = computed(() => betCart.totalOdds)
 const cartItems = computed(() => betCart.items)
@@ -111,6 +169,12 @@ const timeText = (t) => {
   if (!t) return ''
   const d = new Date(t)
   return pad(d.getHours()) + ':' + pad(d.getMinutes())
+}
+
+const hotText = (n) => {
+  const v = Number(n) || 0
+  if (v >= 10000) return (v / 10000).toFixed(1) + '万'
+  return String(v)
 }
 
 /** 日期分组: 今天/明天/周X */
@@ -171,6 +235,76 @@ const spfOf = (match) => {
 
 const goDetail = (match) => {
   uni.navigateTo({ url: '/pages/match/detail?id=' + match._id })
+}
+
+/** 该场次有直播时跳转播放页 */
+const goLiveMatch = (match, live) => {
+  const room = live && live.rooms && live.rooms[0]
+  let url = '/pages/match/live?matchId=' + encodeURIComponent(match._id)
+  if (room) url += '&roomId=' + encodeURIComponent(room.roomId)
+  uni.navigateTo({ url })
+}
+
+/** 顶部「正在直播」卡片跳转播放页 */
+const goLiveGroup = (group) => {
+  const room = group && group.rooms && group.rooms[0]
+  if (!room) return
+  const url = '/pages/match/live?roomId=' + encodeURIComponent(room.roomId) +
+    '&home=' + encodeURIComponent(group.hostTeamName || '') +
+    '&away=' + encodeURIComponent(group.guestTeamName || '') +
+    '&league=' + encodeURIComponent(group.leagueName || '')
+  uni.navigateTo({ url })
+}
+
+/** 直播接口失败不影响赛事列表，返回 null 由调用方忽略 */
+const callLive = async (data) => {
+  try {
+    const res = await uniCloud.callFunction({ name: 'user-live', data })
+    if (res.result && res.result.code === 0) return res.result.data || {}
+    return null
+  } catch (e) {
+    console.warn('直播接口调用失败:', e)
+    return null
+  }
+}
+
+/** 加载直播信息(最多每 2 分钟刷新一次，避免赔率轮询重复请求) */
+const loadLives = async () => {
+  const token = uni.getStorageSync('token')
+  if (!token) return
+  // 失败后 60 秒内不重复请求，避免斗球挂掉时被赔率轮询带着刷接口
+  if (Date.now() < liveRetryAt) return
+  // 留 10 秒余量，避免定时器刚好提前触发时被这里挡掉
+  if (Date.now() - liveLoadedAt < LIVE_REFRESH_MS - 10000) return
+  liveLoadedAt = Date.now()
+
+  try {
+    const ids = matchList.value.map(m => m._id)
+    const [listData, liveData] = await Promise.all([
+      ids.length ? callLive({ token, action: 'list', matchIds: ids }) : Promise.resolve(null),
+      callLive({ token, action: 'live' })
+    ])
+
+    if (listData) {
+      const map = {}
+      for (const item of listData.lives || []) {
+        item.rooms = item.rooms || []
+        map[item.matchId] = item
+      }
+      liveMap.value = map
+    }
+    if (liveData) {
+      liveGroups.value = liveData.groups || []
+    }
+    if (!listData && !liveData) {
+      liveRetryAt = Date.now() + 60 * 1000
+    } else {
+      liveRetryAt = 0
+    }
+  } catch (e) {
+    console.warn('加载直播信息失败:', e)
+    liveRetryAt = Date.now() + 60 * 1000
+  }
 }
 
 const onCartRemovePlay = ({ playId }) => {
@@ -246,6 +380,8 @@ const loadMatches = async () => {
     }
   } catch (e) { console.error(e) }
   loading.value = false
+  // 直播信息异步加载，失败不影响赛事/赔率展示
+  loadLives()
 }
 
 onShow(() => {
@@ -261,10 +397,18 @@ onShow(() => {
       })
     }
   })
+  // 赔率没变化时 loadMatches 不会触发，这里每 2 分钟主动刷新一次直播信息
+  if (!liveTimer) {
+    liveTimer = setInterval(() => { loadLives() }, LIVE_REFRESH_MS)
+  }
 })
 
 onHide(() => {
   stopPolling()
+  if (liveTimer) {
+    clearInterval(liveTimer)
+    liveTimer = null
+  }
 })
 </script>
 
@@ -280,6 +424,94 @@ onHide(() => {
   background: #e8eaf6;
   font-size: 22rpx;
   color: #1a237e;
+}
+
+// ============ 直播 ============
+.live-dot {
+  display: inline-block;
+  width: 12rpx;
+  height: 12rpx;
+  border-radius: 50%;
+  background: #bbb;
+  flex-shrink: 0;
+  &.on {
+    background: #ff3b30;
+    box-shadow: 0 0 0 4rpx rgba(255, 59, 48, 0.15);
+    animation: livePulse 1.6s infinite;
+  }
+}
+
+@keyframes livePulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.35; }
+  100% { opacity: 1; }
+}
+
+.live-strip {
+  background: #fff;
+  margin-top: 16rpx;
+  padding: 22rpx 0 24rpx;
+}
+
+.live-strip-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24rpx 16rpx;
+  .live-strip-title {
+    display: flex;
+    align-items: center;
+    gap: 10rpx;
+    font-size: 30rpx;
+    font-weight: bold;
+    color: #1a1a1a;
+  }
+  .live-strip-sub { font-size: 22rpx; color: #999; }
+}
+
+.live-scroll { white-space: nowrap; }
+
+.live-card {
+  display: inline-block;
+  width: 420rpx;
+  margin-left: 20rpx;
+  padding: 20rpx 22rpx;
+  border-radius: 16rpx;
+  background: linear-gradient(135deg, #fff5f5, #fff);
+  border: 1rpx solid #ffe0e0;
+  vertical-align: top;
+  &:first-child { margin-left: 24rpx; }
+
+  .live-card-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14rpx;
+    .live-league { font-size: 22rpx; color: #ff3b30; font-weight: bold; }
+    .live-hot { font-size: 20rpx; color: #bbb; }
+  }
+  .live-teams {
+    display: flex;
+    align-items: center;
+    gap: 10rpx;
+    margin-bottom: 16rpx;
+    .live-team {
+      font-size: 26rpx; font-weight: bold; color: #222;
+      max-width: 160rpx; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .live-vs { font-size: 20rpx; color: #bbb; }
+  }
+  .live-card-bottom {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    .live-room-count { font-size: 20rpx; color: #999; }
+    .live-watch-btn {
+      font-size: 22rpx; color: #fff;
+      background: linear-gradient(135deg, #ff3b30, #d32f2f);
+      padding: 6rpx 18rpx; border-radius: 20rpx;
+    }
+  }
 }
 
 .date-group {
@@ -326,6 +558,30 @@ onHide(() => {
     .team-name { font-size: 28rpx; font-weight: bold; margin-top: 8rpx; }
     .vs-box { padding: 0 20rpx; }
     .vs { font-size: 32rpx; font-weight: bold; color: #d32f2f; }
+  }
+
+  .live-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #fff5f5;
+    border: 1rpx solid #ffe0e0;
+    border-radius: 12rpx;
+    padding: 14rpx 20rpx;
+    margin-bottom: 16rpx;
+
+    .live-bar-left {
+      display: flex;
+      align-items: center;
+      gap: 10rpx;
+      min-width: 0;
+    }
+    .live-bar-text { font-size: 24rpx; color: #d32f2f; font-weight: bold; white-space: nowrap; }
+    .live-bar-sub {
+      font-size: 20rpx; color: #999;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .live-bar-action { font-size: 22rpx; color: #d32f2f; font-weight: bold; white-space: nowrap; }
   }
 
   .spf-row {

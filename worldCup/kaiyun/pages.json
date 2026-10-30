@@ -19,6 +19,12 @@
 			}
 		},
 		{
+			"path": "pages/match/live",
+			"style": {
+				"navigationBarTitleText": "赛事直播"
+			}
+		},
+		{
 			"path": "pages/order/list",
 			"style": {
 				"navigationBarTitleText": "我的订单"
