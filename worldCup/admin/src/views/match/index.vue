@@ -10,15 +10,15 @@
       </div>
     </div>
 
-    <!-- 定时同步停摆告警: sync-jczq 每 5 分钟写一次 sync-status, 超过 15 分钟没更新说明触发器没在跑 -->
+    <!-- 定时同步停摆告警: sync-jczq 每分钟写一次 sync-status, 超过 5 分钟没更新说明触发器没在跑 -->
     <el-alert v-if="syncStale" type="error" :closable="false" show-icon style="margin-bottom:16px">
       <template #title>
         定时同步已停摆{{ syncStatus && lastSyncAt ? '：上次同步 ' + fmt(lastSyncAt) + '（' + agoText + '）' : '：暂无同步记录' }}
         <span v-if="syncStatus && syncStatus.error">，最近一次失败：{{ syncStatus.error }}</span>
       </template>
       <template #default>
-        移动端只会展示「未开赛」赛事，同步停摆会导致手机端显示"暂无赛事"。请到 uniCloud 控制台检查
-        <b>sync-jczq</b> 的定时触发器是否仍为 <code>0 */5 * * * * *</code>（换服务空间后需重新注册）。
+        移动端展示「未开赛 + 进行中」赛事，同步停摆会导致手机端赛事不更新。请到 uniCloud 控制台检查
+        <b>sync-jczq</b> 的定时触发器是否仍为 <code>0 */1 * * * * *</code>（换服务空间后需重新注册）。
       </template>
     </el-alert>
 
@@ -113,8 +113,8 @@ const selectedIds = ref([])
 const qf = reactive({ name: '', status: '', online: '' })
 
 // ---- 同步健康状态(定时器停摆告警) ----
-const SYNC_INTERVAL_MS = 5 * 60 * 1000   // sync-jczq 的触发周期
-const SYNC_STALE_MS = 15 * 60 * 1000     // 超过 3 个周期没更新即认为停摆
+const SYNC_INTERVAL_MS = 1 * 60 * 1000   // sync-jczq 的触发周期
+const SYNC_STALE_MS = 5 * 60 * 1000      // 超过 5 个周期没更新即认为停摆
 const syncStatus = ref(null)
 const syncStatusLoaded = ref(false)
 const nowTs = ref(Date.now())

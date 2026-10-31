@@ -1,8 +1,8 @@
 'use strict'
 // @url /user/matches
-// 移动端赛事列表: 只返回"今明2天"(天数可配)内已上架且未开赛的赛事(客户确认)
+// 移动端赛事列表: 返回"今明2天"(天数可配)内已上架未开赛的赛事 + 当前进行中的赛事
 // 详情/轮询: 传 matchId 可取单场(不受展示窗口限制)
-// 每场赛事含7组玩法(胜平负/让球胜平负/比分/总进球区间/半全场/让球盘/大小球), 停售玩法过滤
+// 未开赛含7组玩法; 进行中只返回比分/时间等实时数据, 不返回可下注玩法
 const db = uniCloud.database()
 const cmd = db.command
 const { success, fail, verifyToken } = require('./utils')
@@ -17,6 +17,10 @@ const endOfWindow = (nowMs, days) => {
 // 展示天数默认2(含今天和明天); 上限10, 防止误配置成超大窗口
 const DEFAULT_MATCH_DAYS = 2
 const MAX_MATCH_DAYS = 10
+const LIVE_LOOKBACK_MS = 6 * 60 * 60 * 1000
+const LIVE_SUB_CATEGORIES = ['让球盘', '大小球']
+// vipc 盘口为赛前盘, 暂无实时滚球赔率源: 进行中赛事只展示比分, 不返回可下注玩法
+const LIVE_BET_READY = false
 
 exports.main = async (event, context) => {
   const token = event.token || (event.headers && (event.headers.authorization || event.headers.Authorization || '')).replace('Bearer ', '')
@@ -36,7 +40,7 @@ exports.main = async (event, context) => {
     const reqMatchId = event.matchId ? String(event.matchId) : ''
 
     // 1. 查赛事
-    //   - 列表(matchId 为空): 已上架、未开赛、未删除、开赛时间在(当前, 展示窗口上界)之间, 按开赛时间升序
+    //   - 列表(matchId 为空): 当前进行中的滚球赛事 + 已上架未开赛且开赛时间在展示窗口内的赛事
     //   - 详情/轮询(matchId 有值): 按 id 取单场, 不看展示窗口, 保证已打开页面跨天/跨窗口后仍可用
     let matchesRes
     if (reqMatchId) {
@@ -47,16 +51,40 @@ exports.main = async (event, context) => {
     } else {
       const now = new Date()
       const deadline = endOfWindow(now.getTime(), matchDays)
-      matchesRes = await db.collection('matches')
-        .where({
-          online: cmd.neq(false),
-          deleted: cmd.neq(true),
-          status: 'upcoming',
-          startTime: cmd.gt(now).and(cmd.lt(deadline))
-        })
-        .orderBy('startTime', 'asc')
-        .limit(200)
-        .get()
+      const liveSince = new Date(now.getTime() - LIVE_LOOKBACK_MS)
+      const [liveRes, upcomingRes] = await Promise.all([
+        db.collection('matches')
+          .where({
+            online: cmd.neq(false),
+            deleted: cmd.neq(true),
+            status: 'live',
+            startTime: cmd.gt(liveSince)
+          })
+          .orderBy('startTime', 'asc')
+          .limit(50)
+          .get(),
+        db.collection('matches')
+          .where({
+            online: cmd.neq(false),
+            deleted: cmd.neq(true),
+            status: 'upcoming',
+            startTime: cmd.gt(now).and(cmd.lt(deadline))
+          })
+          .orderBy('startTime', 'asc')
+          .limit(200)
+          .get()
+      ])
+
+      // 进行中排最前; 合并后最多 200 场, 与 check-odds-version 的单次上限保持一致
+      const merged = []
+      const seen = new Set()
+      for (const m of (liveRes.data || []).concat(upcomingRes.data || [])) {
+        if (seen.has(m._id)) continue
+        seen.add(m._id)
+        merged.push(m)
+        if (merged.length >= 200) break
+      }
+      matchesRes = { data: merged }
     }
 
     const matches = matchesRes.data || []
@@ -98,6 +126,7 @@ exports.main = async (event, context) => {
     // 3. 组装: 大类(5个Tab) -> 小类 -> 玩法
     const result = []
     for (const match of matches) {
+      const isLive = match.status === 'live'
       const plays = (playsByMatch[match._id] || []).sort((a, b) => (a.sort || 0) - (b.sort || 0))
 
       // 大类分组(按分类树的 sort 顺序)
@@ -106,6 +135,11 @@ exports.main = async (event, context) => {
       for (const play of plays) {
         const small = catMap[play.categoryId]
         if (!small) continue
+        // 进行中赛事: 未接入实时滚球源时只展示比分, 不下发任何玩法
+        if (isLive && !LIVE_BET_READY) continue
+        // 接入滚球源后只开放接口滚球盘(让球盘/大小球), 竞彩玩法在开赛后停售
+        if (isLive && (LIVE_SUB_CATEGORIES.indexOf(small.name) < 0 ||
+          !/^(asia|dxq):/.test(String(play.sourceKey || '')))) continue
         const big = small.parentId ? catMap[small.parentId] : null
         const bigName = big ? big.name : (small.name || '其他')
         const bigSort = big ? (big.sort || 99) : 99
@@ -172,8 +206,14 @@ exports.main = async (event, context) => {
         jingcaiId: match.jingcaiId || '',
         leagueName: match.leagueName || '',
         displayState: match.displayState || '',
+        time: match.time || '',
+        homeScore: match.homeScore,
+        guestScore: match.guestScore,
+        homeHalfScore: match.homeHalfScore,
+        guestHalfScore: match.guestHalfScore,
         description: match.description || '',
         syncedAt: match.syncedAt,
+        liveOddsAt: match.liveOddsAt || null,
         categoryPlays
       })
     }

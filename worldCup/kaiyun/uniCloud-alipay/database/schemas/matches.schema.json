@@ -15,7 +15,7 @@
     "startTime": {
       "bsonType": "date",
       "title": "开始时间",
-      "description": "赛事开始时间，也是下注截止时间"
+      "description": "赛事开始时间；未开赛赛事以此为下注截止，进行中赛事按滚球截止规则处理"
     },
     "status": {
       "bsonType": "string",
@@ -64,6 +64,7 @@
       "description": "含\"单关\"表示该场胜平负可单关投注"
     },
     "syncedAt": { "bsonType": "date", "title": "数据同步时间", "description": "用于数据更新时间展示与过期检测" },
+    "liveOddsAt": { "bsonType": "date", "title": "滚球盘口同步时间", "description": "仅进行中赛事成功拉取滚球盘口时更新，用于判断滚球盘是否新鲜" },
     "settledAt": { "bsonType": "date", "title": "结算时间" },
     "createTime": { "bsonType": "date" },
     "updateTime": { "bsonType": "date" },

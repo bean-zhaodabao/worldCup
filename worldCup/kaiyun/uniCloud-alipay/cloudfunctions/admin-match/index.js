@@ -15,7 +15,7 @@ exports.main = async (event, context) => {
 
   try {
     // GET /sync-status - 同步健康状态(管理端顶部"上次同步时间"告警用)
-    // sync-jczq 每轮都会写 sync-status/main, 超过 15 分钟未更新即说明定时器没在跑
+    // sync-jczq 每分钟都会写 sync-status/main, 超过 5 分钟未更新即说明定时器没在跑
     if (method === 'GET' && path.includes('/sync-status')) {
       try {
         const res = await db.collection('sync-status').doc('main').get()

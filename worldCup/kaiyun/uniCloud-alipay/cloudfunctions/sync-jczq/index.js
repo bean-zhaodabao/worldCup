@@ -14,10 +14,13 @@
  *     - 亚盘/大小球取 companyId 8/12/14 合并(同盘口去重保留低水位)
  *     - 水位为香港盘: 赢=本金×(1+水位), 内部统一存十进制 odds=1+水位
  *  3. 赔率变化 -> matches.oddsVersion++ (移动端2s轮询自动刷新)
- *  4. 自动结算: 完场赛事按90分钟赛果判定玩法结果, 结算订单并入账钱包
+ *  4. 进行中赛事: 每轮同步比分/半场比分/比赛分钟, 供移动端展示实时数据
+ *     滚球下注暂无可靠实时赔率源, LIVE_BET_READY 默认关闭
+ *  5. 自动结算: 完场赛事按90分钟赛果判定玩法结果, 结算订单并入账钱包
  *     (走盘退本金/半赢半输/取消退款), 无需人工设定
  *
- * 定时: config.json 每5分钟触发; 也可由管理端"立即同步"直接调用本函数
+ * 定时: config.json 每分钟触发; 未开赛完整赔率按 FULL_ODDS_INTERVAL_MS 节流,
+ *       进行中赛事比分/状态每轮同步; 也可由管理端"立即同步"直接调用本函数
  * 注意: 需在 uniCloud 控制台将本函数超时时间调大(建议60s)、内存512MB
  */
 const https = require('https')
@@ -35,6 +38,10 @@ const PANKOU_COMPANIES = [8, 12, 14]
 const ODDS_SYNC_CONCURRENCY = 10
 const STALE_MS = 10 * 60 * 1000 // 数据超过10分钟未更新则移动端暂停投注
 const ZOMBIE_GRACE_MS = 6 * 60 * 60 * 1000 // 开赛后 6 小时仍停留在"未开始"的赛事视为僵尸场次
+const FULL_ODDS_INTERVAL_MS = 4 * 60 * 1000 // 未开赛玩法全量同步间隔(定时器每分钟触发)
+// 重要: vipc 的 pankou 接口是赛前盘(开赛后不更新), 不能直接用于滚球下注。
+// 接入真正的实时滚球赔率源并替换 syncLivePankou 后, 才可置为 true。
+const LIVE_BET_READY = false
 
 // ==================== HTTP 工具 ====================
 
@@ -131,9 +138,24 @@ async function upsertMatch(model, stats) {
     const update = Object.assign({}, common)
     // 状态单调推进(不因接口波动回退), cancelled 始终允许
     const oldStatus = doc.status || 'upcoming'
-    if (newStatus === 'cancelled' || STATUS_RANK[newStatus] > STATUS_RANK[oldStatus]) {
+    const statusAdvanced = newStatus !== oldStatus &&
+      (newStatus === 'cancelled' || STATUS_RANK[newStatus] > STATUS_RANK[oldStatus])
+    // 比分/比赛分钟变化也让移动端 2 秒轮询刷新, 用于进行中实时比分展示
+    const scoreChanged = doc.homeScore !== model.homeScore ||
+      doc.guestScore !== model.guestScore ||
+      doc.homeHalfScore !== model.homeHalfScore ||
+      doc.guestHalfScore !== model.guestHalfScore ||
+      (doc.time || '') !== (model.time || '') ||
+      (doc.displayState || '') !== (model.displayState || '')
+
+    let bumpVersion = false
+    if (statusAdvanced) {
       update.status = newStatus
+      bumpVersion = true
     }
+    if (scoreChanged) bumpVersion = true
+    if (bumpVersion) update.oddsVersion = cmd.inc(1)
+
     await db.collection('matches').doc(doc._id).update(update)
     stats.matchesUpdated++
     return { _id: doc._id, statusChangedToFinished: (newStatus === 'finished' && oldStatus !== 'finished' && oldStatus !== 'settled'), cancelled: newStatus === 'cancelled', settledAlready: oldStatus === 'settled' }
@@ -193,6 +215,93 @@ async function upsertPlay(matchId, catIds, play) {
     createTime: new Date(), updateTime: new Date()
   }, play)))
   return { changed: true, added: true }
+}
+
+// ==================== 滚球盘口 ====================
+
+/** 滚球只保留亚盘/大小球, 其余玩法在比赛开始后停售 */
+function isPankouSourceKey(sourceKey) {
+  return /^(asia|dxq):/.test(String(sourceKey || ''))
+}
+
+/** 批量停售玩法 */
+async function stopPlays(ids) {
+  if (!ids || ids.length === 0) return 0
+  const res = await db.collection('plays')
+    .where({ _id: cmd.in(ids) })
+    .update({ stop: true, updateTime: new Date() })
+  return res.updated || 0
+}
+
+/**
+ * 滚球玩法对账:
+ *  - 竞彩类玩法(胜平负/让球胜平负/比分/总进球/半全场)开赛后全部停售
+ *  - 盘口变化后, 当前盘口已不存在的旧盘口停售
+ */
+async function reconcileLivePlays(matchId, currentPankouKeys, stats, oddsChangedMatchIds) {
+  const res = await db.collection('plays')
+    .where({ matchId, deleted: cmd.neq(true) })
+    .limit(1000)
+    .get()
+  const stopIds = []
+  for (const p of res.data || []) {
+    if (p.stop) continue
+    const key = String(p.sourceKey || '')
+    if (!isPankouSourceKey(key) || !currentPankouKeys.has(key)) stopIds.push(p._id)
+  }
+  const stopped = await stopPlays(stopIds)
+  if (stopped > 0) {
+    stats.livePlaysStopped += stopped
+    oddsChangedMatchIds.add(matchId)
+  }
+}
+
+/**
+ * 同步进行中赛事的滚球盘口(只取亚盘/大小球即时盘)
+ * 接口失败或返回空盘时停售全部滚球盘, 防止客户端继续用旧盘下注
+ */
+async function syncLivePankou(model, internalId, catIds, stats, oddsChangedMatchIds) {
+  const mid = String(model.matchId)
+  const ref = BASE + '/live/football/' + mid
+  let pk = null
+  let pkError = false
+  try {
+    // 滚球每分钟都要跑, 加时间戳避免缓存; 失败快速返回并停盘, 避免长时间重试拖慢整轮同步
+    pk = await fetchJson(BASE + '/i/match/football/' + mid + '/odds/pankou/?_=' + Date.now(), ref, 1)
+  } catch (e) {
+    pkError = true
+    stats.errors.push('滚球盘口失败 ' + mid + ': ' + e.message)
+  }
+
+  const currentKeys = new Set()
+  if (pk && (pk.asia || pk.dxq)) {
+    let changed = false
+    const asiaPlays = buildPankouPlays(mergePankou(pk.asia || [], PANKOU_COMPANIES), 'asia')
+    const dxqPlays = buildPankouPlays(mergePankou(pk.dxq || [], PANKOU_COMPANIES), 'dxq')
+    for (const p of asiaPlays.concat(dxqPlays)) {
+      currentKeys.add(p.sourceKey)
+      const r = await upsertPlay(internalId, catIds, p)
+      if (r.error) stats.errors.push(r.error)
+      else {
+        if (r.added) stats.playsAdded++
+        else stats.playsUpdated++
+        if (r.changed) changed = true
+      }
+    }
+    if (changed) oddsChangedMatchIds.add(internalId)
+    if (currentKeys.size > 0) {
+      await db.collection('matches').doc(internalId).update({ liveOddsAt: new Date() })
+    } else {
+      // 接口返回了结构但没有可解析盘口, 视为暂停
+      stats.livePaused++
+    }
+  } else if (!pkError) {
+    // 接口正常但没有盘口(如暂停/无盘), 计为暂停, 由对账停售旧盘
+    stats.livePaused++
+  }
+
+  // 无论接口成功与否都做一次对账: 失败/空盘时 currentKeys 为空, 会停售全部滚球盘
+  await reconcileLivePlays(internalId, currentKeys, stats, oddsChangedMatchIds)
 }
 
 // ==================== 结算引擎(纯判定在 odds-core.js) ====================
@@ -353,6 +462,16 @@ const SMALL_CATS = [
   { name: '让球盘', parent: '盘口', sort: 1 }
 ]
 
+/** 只读取现有小类映射(滚球分钟级同步用, 不做创建/修复) */
+async function loadCategoryIds() {
+  const res = await db.collection('play-categories').where({ deleted: cmd.neq(true) }).get()
+  const catIds = {}
+  for (const c of res.data || []) {
+    if (c.parentId) catIds[c.name] = c._id
+  }
+  return catIds
+}
+
 /**
  * 确保标准 5 大类 + 7 小类存在(缺失自动创建, 误删自动恢复)
  * 返回 { 小类名: categoryId }
@@ -426,12 +545,21 @@ async function acquireLock() {
     const res = await db.collection('sync-status').doc('main').get()
     const doc = res.data && res.data[0]
     if (doc && doc.running && doc.lockAt && (Date.now() - new Date(doc.lockAt).getTime() < 2 * 60 * 1000)) {
-      return false // 上一轮还在跑
+      return { ok: false } // 上一轮还在跑
     }
-    await db.collection('sync-status').doc('main').set({ running: true, lockAt: new Date() })
-    return true
+    if (doc) {
+      // 用 update 保留 lastFullOddsAt 等已有字段, 避免每轮 set 覆盖
+      await db.collection('sync-status').doc('main').update({ running: true, lockAt: new Date() })
+    } else {
+      await db.collection('sync-status').doc('main').set({ running: true, lockAt: new Date() })
+    }
+    return { ok: true, lastFullOddsAt: (doc && doc.lastFullOddsAt) || null }
   } catch (e) {
-    return true // 首次运行无文档
+    // 首次运行无文档
+    try {
+      await db.collection('sync-status').doc('main').set({ running: true, lockAt: new Date() })
+    } catch (e2) { /* ignore */ }
+    return { ok: true, lastFullOddsAt: null }
   }
 }
 
@@ -441,6 +569,7 @@ async function releaseLock(result) {
       running: false,
       lastRunAt: new Date(),
       lastSuccessAt: result.error ? null : new Date(),
+      lastFullOddsAt: result.lastFullOddsAt || null,
       stats: result.stats || null,
       error: result.error || null
     })
@@ -451,21 +580,26 @@ async function releaseLock(result) {
 
 // ==================== 主流程 ====================
 
-async function doSync() {
+async function doSync(lastFullOddsAt, forceFull) {
   const stats = {
     matchesAdded: 0, matchesUpdated: 0, playsAdded: 0, playsUpdated: 0,
     oddsChangedMatches: 0, settledOrders: 0, refunded: 0, pendingPlays: 0,
     expiredMatches: 0, legacyGoalsStopped: 0,
+    liveMatchesSynced: 0, livePlaysStopped: 0, livePaused: 0, fullOddsSynced: false,
     errors: []
   }
   const oddsChangedMatchIds = new Set()
   const settledMatchIds = new Set()
 
-  // 1. 分类映射(缺失自动创建)
-  const catIds = await ensureCategories()
+  const lastFullOddsMs = lastFullOddsAt ? new Date(lastFullOddsAt).getTime() : 0
+  const fullOddsDue = !!forceFull || !Number.isFinite(lastFullOddsMs) || !lastFullOddsMs ||
+    lastFullOddsMs > Date.now() || (Date.now() - lastFullOddsMs >= FULL_ODDS_INTERVAL_MS)
+
+  // 1. 分类映射: 全量同步时创建/修复, 分钟级同步只读取现有分类
+  const catIds = fullOddsDue ? await ensureCategories() : await loadCategoryIds()
 
   // 1.1 旧版总进球 4+球(jq:r4) 停售, 由 4-6球(jq:r46) / 7+球(jq:r7) 取代
-  await retireLegacyGoalsPlays(stats)
+  if (fullOddsDue) await retireLegacyGoalsPlays(stats)
 
   // 2. 拉赛事列表(today/next ≈ 昨天~后天+2)
   const listUrl = BASE + '/i/live/jczq/date/today/next?_=' + Date.now()
@@ -489,60 +623,74 @@ async function doSync() {
     }
   }
 
-  // 4. 对未开赛场次并发拉取赔率+盘口
-  const needOdds = models.filter(m => mapStatus(m) === 'upcoming' && matchMap[String(m.matchId)])
-  await runPool(needOdds, ODDS_SYNC_CONCURRENCY, async (model) => {
-    const mid = String(model.matchId)
-    const internalId = matchMap[mid]._id
-    const ref = BASE + '/live/football/' + mid
-    const errors = []
+  // 4. 进行中赛事: 只有接入实时滚球赔率源后才同步滚球盘
+  if (LIVE_BET_READY) {
+    const liveModels = models.filter(m => mapStatus(m) === 'live' && matchMap[String(m.matchId)])
+    await runPool(liveModels, ODDS_SYNC_CONCURRENCY, async (model) => {
+      const mid = String(model.matchId)
+      await syncLivePankou(model, matchMap[mid]._id, catIds, stats, oddsChangedMatchIds)
+      stats.liveMatchesSynced++
+      return null
+    })
+  }
 
-    // 竞彩官方赔率
-    try {
-      const st = await fetchJson(BASE + '/i/match/jczq/sporttery/' + mid, ref)
-      if (st && st.code === 0 && st.data) {
-        const plays = buildSportteryPlays(st.data)
-        let changed = false
-        for (const p of plays) {
-          const r = await upsertPlay(internalId, catIds, p)
-          if (r.error) errors.push(r.error)
-          else { if (r.added) stats.playsAdded++; else stats.playsUpdated++; if (r.changed) changed = true }
+  // 5. 未开赛赛事: 完整赔率同步按间隔节流(定时器每分钟触发, 避免每分钟全量拉取)
+  if (fullOddsDue) {
+    const needOdds = models.filter(m => mapStatus(m) === 'upcoming' && matchMap[String(m.matchId)])
+    await runPool(needOdds, ODDS_SYNC_CONCURRENCY, async (model) => {
+      const mid = String(model.matchId)
+      const internalId = matchMap[mid]._id
+      const ref = BASE + '/live/football/' + mid
+      const errors = []
+
+      // 竞彩官方赔率
+      try {
+        const st = await fetchJson(BASE + '/i/match/jczq/sporttery/' + mid, ref)
+        if (st && st.code === 0 && st.data) {
+          const plays = buildSportteryPlays(st.data)
+          let changed = false
+          for (const p of plays) {
+            const r = await upsertPlay(internalId, catIds, p)
+            if (r.error) errors.push(r.error)
+            else { if (r.added) stats.playsAdded++; else stats.playsUpdated++; if (r.changed) changed = true }
+          }
+          if (changed) oddsChangedMatchIds.add(internalId)
         }
-        if (changed) oddsChangedMatchIds.add(internalId)
+      } catch (e) {
+        errors.push('竞彩赔率失败 ' + mid + ': ' + e.message)
       }
-    } catch (e) {
-      errors.push('竞彩赔率失败 ' + mid + ': ' + e.message)
-    }
 
-    // 盘口(亚盘+大小球)
-    try {
-      const pk = await fetchJson(BASE + '/i/match/football/' + mid + '/odds/pankou/', ref)
-      if (pk && (pk.asia || pk.dxq)) {
-        let changed = false
-        const asiaPlays = buildPankouPlays(mergePankou(pk.asia || [], PANKOU_COMPANIES), 'asia')
-        const dxqPlays = buildPankouPlays(mergePankou(pk.dxq || [], PANKOU_COMPANIES), 'dxq')
-        for (const p of asiaPlays.concat(dxqPlays)) {
-          const r = await upsertPlay(internalId, catIds, p)
-          if (r.error) errors.push(r.error)
-          else { if (r.added) stats.playsAdded++; else stats.playsUpdated++; if (r.changed) changed = true }
+      // 盘口(亚盘+大小球)
+      try {
+        const pk = await fetchJson(BASE + '/i/match/football/' + mid + '/odds/pankou/', ref)
+        if (pk && (pk.asia || pk.dxq)) {
+          let changed = false
+          const asiaPlays = buildPankouPlays(mergePankou(pk.asia || [], PANKOU_COMPANIES), 'asia')
+          const dxqPlays = buildPankouPlays(mergePankou(pk.dxq || [], PANKOU_COMPANIES), 'dxq')
+          for (const p of asiaPlays.concat(dxqPlays)) {
+            const r = await upsertPlay(internalId, catIds, p)
+            if (r.error) errors.push(r.error)
+            else { if (r.added) stats.playsAdded++; else stats.playsUpdated++; if (r.changed) changed = true }
+          }
+          if (changed) oddsChangedMatchIds.add(internalId)
         }
-        if (changed) oddsChangedMatchIds.add(internalId)
+      } catch (e) {
+        errors.push('盘口失败 ' + mid + ': ' + e.message)
       }
-    } catch (e) {
-      errors.push('盘口失败 ' + mid + ': ' + e.message)
-    }
 
-    if (errors.length) stats.errors.push(mid + ': ' + errors.join('; '))
-    return null
-  })
+      if (errors.length) stats.errors.push(mid + ': ' + errors.join('; '))
+      return null
+    })
+    stats.fullOddsSynced = true
+  }
 
-  // 5. oddsVersion++ (移动端轮询据此刷新)
+  // 6. oddsVersion++ (移动端轮询据此刷新)
   for (const mid of oddsChangedMatchIds) {
     await db.collection('matches').doc(mid).update({ oddsVersion: cmd.inc(1) })
     stats.oddsChangedMatches++
   }
 
-  // 6. 自动结算完场赛事
+  // 7. 自动结算完场赛事
   const finishedRes = await db.collection('matches')
     .where({ status: cmd.in(['finished', 'cancelled']), settledAt: null })
     .limit(200)
@@ -571,7 +719,7 @@ async function doSync() {
     }
   }
 
-  // 7. 清理僵尸赛事: 开赛时间已过很久仍停留在 upcoming 的场次
+  // 8. 清理僵尸赛事: 开赛时间已过很久仍停留在 upcoming 的场次
   //    列表接口只拉 today/next 窗口, 赛事滑出窗口后不会再被更新, 否则会永久显示"未开始"
   //    注意: 必须标成 expired 而不是 finished —— 这些场次没有比分, regularScore 会把
   //    undefined 当 0:0, 标 finished 会被自动结算引擎按假比分结算所有订单
@@ -602,23 +750,29 @@ async function doSync() {
     }
   }
 
-  return { stats, settledMatchIds: Array.from(settledMatchIds) }
+  return {
+    stats,
+    settledMatchIds: Array.from(settledMatchIds),
+    lastFullOddsAt: fullOddsDue ? new Date() : (lastFullOddsAt || null)
+  }
 }
 
 exports.main = async (event, context) => {
   // 定时触发与手动触发共用入口; 手动触发时 event 可能含任意参数, 忽略
-  if (!(await acquireLock())) {
+  const lock = await acquireLock()
+  if (!lock.ok) {
     return { code: -1, message: '上一轮同步仍在运行, 跳过本次' }
   }
   const startedAt = Date.now()
   try {
-    const result = await doSync()
+    // 管理端"立即同步"传 manual=true 时强制全量同步未开赛赔率
+    const result = await doSync(lock.lastFullOddsAt, !!(event && event.manual))
     const cost = ((Date.now() - startedAt) / 1000).toFixed(1) + 's'
-    await releaseLock({ stats: result.stats, error: null })
+    await releaseLock({ stats: result.stats, error: null, lastFullOddsAt: result.lastFullOddsAt })
     console.log('sync-jczq done in ' + cost, JSON.stringify(result.stats))
     return { code: 0, message: '同步完成, 耗时 ' + cost, data: result.stats }
   } catch (e) {
-    await releaseLock({ stats: null, error: e.message || String(e) })
+    await releaseLock({ stats: null, error: e.message || String(e), lastFullOddsAt: lock.lastFullOddsAt })
     console.error('sync-jczq error:', e)
     return { code: -1, message: '同步失败: ' + (e.message || String(e)) }
   }

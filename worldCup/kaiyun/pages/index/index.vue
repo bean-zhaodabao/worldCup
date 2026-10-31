@@ -38,19 +38,31 @@
       </scroll-view>
     </view>
 
-    <!-- 按日期分组 -->
-    <view class="date-group" v-for="group in dateGroups" :key="group.key">
+    <!-- 进行中(滚球) + 按日期分组 -->
+    <view
+      class="date-group"
+      v-for="group in dateGroups"
+      :key="group.key"
+      :class="{ 'live-group': group.key === 'live' }"
+    >
       <view class="date-header">
+        <text class="live-dot on" v-if="group.key === 'live'"></text>
         <text class="date-label">{{ group.label }}</text>
         <text class="date-num">{{ group.dateText }}</text>
         <text class="date-count">{{ group.matches.length }} 场</text>
       </view>
 
-      <view class="match-card" v-for="match in group.matches" :key="match._id" @click="goDetail(match)">
+      <view
+        class="match-card"
+        v-for="match in group.matches"
+        :key="match._id"
+        :class="{ 'live-match-card': match.status === 'live' }"
+        @click="goDetail(match)"
+      >
         <view class="match-header">
           <text class="match-cc" v-if="match.ccId">{{ match.ccId }}</text>
           <text class="match-league">{{ match.leagueName || match.name }}</text>
-          <text class="match-time">{{ timeText(match.startTime) }}</text>
+          <text class="match-time">{{ matchTimeText(match) }}</text>
         </view>
         <view class="match-teams">
           <view class="team">
@@ -58,7 +70,9 @@
             <text class="team-name">{{ match.teamA }}</text>
           </view>
           <view class="vs-box">
-            <text class="vs">VS</text>
+            <text class="vs" v-if="match.status !== 'live'">VS</text>
+            <text class="live-score" v-else>{{ scoreText(match) }}</text>
+            <text class="live-minute" v-if="match.status === 'live'">{{ match.time || match.displayState || '进行中' }}</text>
           </view>
           <view class="team">
             <image class="flag" :src="match.teamBFlag || '/static/football.png'" mode="aspectFit"></image>
@@ -82,8 +96,16 @@
           </view>
           <text class="live-bar-action">观看直播 ›</text>
         </view>
-        <!-- 胜平负赔率简览 -->
-        <view class="spf-row" v-if="spfOf(match).length">
+        <!-- 进行中赛事: 仅查看实时数据 -->
+        <view class="live-bet-row" v-if="match.status === 'live'">
+          <view class="live-bet-left">
+            <text class="live-bet-tag">进行中</text>
+            <text class="live-bet-markets">实时比分</text>
+          </view>
+          <text class="live-bet-action">查看实时数据 ›</text>
+        </view>
+        <!-- 胜平负赔率简览(仅未开赛) -->
+        <view class="spf-row" v-if="match.status !== 'live' && spfOf(match).length">
           <view class="spf-item" v-for="p in spfOf(match)" :key="p._id">
             <text class="spf-name">{{ p.name }}</text>
             <text class="spf-odds">{{ fmtOdds(p.odds) }}</text>
@@ -150,6 +172,7 @@ const liveGroups = ref([])
 let liveLoadedAt = 0
 let liveRetryAt = 0
 let liveTimer = null
+let liveScoreTimer = null
 
 const cartCount = computed(() => betCart.count)
 const cartTotalOdds = computed(() => betCart.totalOdds)
@@ -171,13 +194,26 @@ const timeText = (t) => {
   return pad(d.getHours()) + ':' + pad(d.getMinutes())
 }
 
+/** 进行中赛事显示实时比分 */
+const scoreText = (match) => {
+  const h = match.homeScore === undefined || match.homeScore === null ? 0 : match.homeScore
+  const g = match.guestScore === undefined || match.guestScore === null ? 0 : match.guestScore
+  return h + ' : ' + g
+}
+
+/** 进行中显示比赛分钟, 未开赛显示开赛时间 */
+const matchTimeText = (match) => {
+  if (match.status === 'live') return match.time || match.displayState || '进行中'
+  return timeText(match.startTime)
+}
+
 const hotText = (n) => {
   const v = Number(n) || 0
   if (v >= 10000) return (v / 10000).toFixed(1) + '万'
   return String(v)
 }
 
-/** 日期分组: 今天/明天/周X */
+/** 分组: 进行中置顶, 其余按今天/明天/周X */
 const dateGroups = computed(() => {
   const groups = []
   const now = new Date()
@@ -185,7 +221,13 @@ const dateGroups = computed(() => {
   const tomorrow = new Date(now.getTime() + 24 * 3600 * 1000)
   const tomorrowStr = tomorrow.getFullYear() + '-' + pad(tomorrow.getMonth() + 1) + '-' + pad(tomorrow.getDate())
 
+  const liveMatches = matchList.value.filter(m => m.status === 'live')
+  if (liveMatches.length) {
+    groups.push({ key: 'live', label: '进行中', dateText: '实时比分', matches: liveMatches })
+  }
+
   for (const m of matchList.value) {
+    if (m.status === 'live') continue
     const d = new Date(m.startTime)
     const key = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate())
     let label = ''
@@ -199,8 +241,12 @@ const dateGroups = computed(() => {
     }
     group.matches.push(m)
   }
-  // 今天排最前, 其余按日期
-  groups.sort((a, b) => (a.label === '今天' ? -1 : 0) - (b.label === '今天' ? -1 : 0) || a.key.localeCompare(b.key))
+  // 进行中置顶, 今天其次, 其余按日期
+  groups.sort((a, b) => {
+    if (a.key === 'live') return -1
+    if (b.key === 'live') return 1
+    return (a.label === '今天' ? -1 : 0) - (b.label === '今天' ? -1 : 0) || a.key.localeCompare(b.key)
+  })
   return groups
 })
 
@@ -307,6 +353,19 @@ const loadLives = async () => {
   }
 }
 
+/** 有进行中赛事时每分钟刷新比分/比赛分钟(赔率轮询只在版本变化时触发) */
+const ensureLiveScoreTimer = () => {
+  const hasLive = matchList.value.some(m => m.status === 'live')
+  if (hasLive && !liveScoreTimer) {
+    liveScoreTimer = setInterval(() => {
+      if (!loading.value) loadMatches()
+    }, 60 * 1000)
+  } else if (!hasLive && liveScoreTimer) {
+    clearInterval(liveScoreTimer)
+    liveScoreTimer = null
+  }
+}
+
 const onCartRemovePlay = ({ playId }) => {
   betCart.remove(playId)
 }
@@ -382,6 +441,7 @@ const loadMatches = async () => {
   loading.value = false
   // 直播信息异步加载，失败不影响赛事/赔率展示
   loadLives()
+  ensureLiveScoreTimer()
 }
 
 onShow(() => {
@@ -408,6 +468,10 @@ onHide(() => {
   if (liveTimer) {
     clearInterval(liveTimer)
     liveTimer = null
+  }
+  if (liveScoreTimer) {
+    clearInterval(liveScoreTimer)
+    liveScoreTimer = null
   }
 })
 </script>
@@ -525,6 +589,11 @@ onHide(() => {
     .date-num { font-size: 24rpx; color: #999; }
     .date-count { font-size: 22rpx; color: #bbb; margin-left: auto; }
   }
+
+  &.live-group {
+    .date-label { color: #ff3b30; }
+    .date-num { color: #ff8a80; }
+  }
 }
 
 .match-card {
@@ -534,6 +603,11 @@ onHide(() => {
   padding: 24rpx 30rpx;
   box-shadow: 0 2rpx 12rpx rgba(0,0,0,0.04);
   position: relative;
+
+  &.live-match-card {
+    border: 1rpx solid #ffe0e0;
+    background: linear-gradient(180deg, #fff8f8 0%, #fff 28%);
+  }
 
   .match-header {
     display: flex;
@@ -556,8 +630,10 @@ onHide(() => {
     .team { display: flex; flex-direction: column; align-items: center; flex: 1; }
     .flag { width: 80rpx; height: 60rpx; border-radius: 8rpx; background: #f5f5f5; }
     .team-name { font-size: 28rpx; font-weight: bold; margin-top: 8rpx; }
-    .vs-box { padding: 0 20rpx; }
+    .vs-box { padding: 0 20rpx; display: flex; flex-direction: column; align-items: center; }
     .vs { font-size: 32rpx; font-weight: bold; color: #d32f2f; }
+    .live-score { font-size: 36rpx; font-weight: bold; color: #ff3b30; white-space: nowrap; }
+    .live-minute { font-size: 20rpx; color: #ff3b30; margin-top: 4rpx; white-space: nowrap; }
   }
 
   .live-bar {
@@ -582,6 +658,28 @@ onHide(() => {
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
     .live-bar-action { font-size: 22rpx; color: #d32f2f; font-weight: bold; white-space: nowrap; }
+  }
+
+  .live-bet-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #fff5f5;
+    border: 1rpx solid #ffe0e0;
+    border-radius: 12rpx;
+    padding: 14rpx 20rpx;
+    margin-bottom: 16rpx;
+
+    .live-bet-left { display: flex; align-items: center; gap: 10rpx; min-width: 0; }
+    .live-bet-tag {
+      font-size: 20rpx; color: #fff; background: #ff3b30;
+      padding: 2rpx 10rpx; border-radius: 8rpx; font-weight: bold; flex-shrink: 0;
+    }
+    .live-bet-markets {
+      font-size: 24rpx; color: #d32f2f; font-weight: bold;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .live-bet-action { font-size: 22rpx; color: #d32f2f; font-weight: bold; white-space: nowrap; }
   }
 
   .spf-row {

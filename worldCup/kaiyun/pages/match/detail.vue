@@ -1,10 +1,11 @@
 <template>
-  <view class="match-detail">
+  <view class="match-detail" :class="{ 'live-only': !isUpcoming }">
     <!-- 赛事信息 -->
     <view class="match-info">
       <view class="match-top">
         <text class="cc-tag" v-if="match.ccId">{{ match.ccId }}</text>
         <text class="league">{{ match.leagueName || match.name }}</text>
+        <text class="live-tag" v-if="isLive">进行中</text>
         <text class="state" v-if="match.displayState">{{ match.displayState }}</text>
       </view>
       <view class="teams">
@@ -13,8 +14,11 @@
           <text>{{ match.teamA }}</text>
         </view>
         <view class="vs-box">
-          <text class="vs">VS</text>
-          <text class="time">{{ formatTime(match.startTime) }}</text>
+          <text class="vs" v-if="!isStarted">VS</text>
+          <text class="live-score" v-else>{{ scoreText }}</text>
+          <text class="time">
+            {{ isLive ? (match.time || '进行中') : (isStarted ? (match.displayState || '已结束') : formatTime(match.startTime)) }}
+          </text>
         </view>
         <view class="team">
           <image :src="match.teamBFlag || '/static/football.png'" mode="aspectFit" class="flag" />
@@ -24,145 +28,180 @@
       <text class="sync-time" v-if="match.syncedAt">数据更新时间: {{ formatTime(match.syncedAt) }}</text>
     </view>
 
-    <!-- 大类Tab栏 -->
-    <scroll-view scroll-x class="category-tabs" :show-scrollbar="false">
-      <view class="tab-item" :class="{ active: activeTab === 'all' }" @click="activeTab = 'all'">全部玩法</view>
-      <view
-        v-for="cat in categoryPlays"
-        :key="cat.name"
-        class="tab-item"
-        :class="{ active: activeTab === cat.name }"
-        @click="activeTab = cat.name"
-      >{{ cat.name }}</view>
-    </scroll-view>
-
-    <!-- 玩法区: 大类 → 小类 -->
-    <view class="play-section" v-for="bigCat in displayCategories" :key="bigCat.name">
-      <view class="big-cat-title" v-if="activeTab === 'all'">{{ bigCat.name }}</view>
-
-      <view class="sub-category" v-for="sub in bigCat.subCategories" :key="sub.name">
-        <view class="sub-cat-title">
-          <text>{{ subTitle(sub) }}</text>
-          <text class="rq-hint" v-if="sub.name === '让球胜平负' && rqGoal(sub) !== null">
-            {{ rqGoalCn(sub) }}：{{ rqGoalText(sub) }}
-          </text>
+    <!-- 已开赛赛事: 只读比分数据, 不展示任何投注入口 -->
+    <view class="live-data" v-if="isStarted">
+      <view class="live-data-head">
+        <view class="live-data-title">
+          <text class="live-dot" :class="{ on: isLive }">●</text>
+          <text>{{ isLive ? '实时数据' : '比赛数据' }}</text>
         </view>
+        <text class="live-data-state">{{ match.displayState || (isLive ? '进行中' : '已结束') }} {{ match.time || '' }}</text>
+      </view>
+      <view class="live-data-grid">
+        <view class="live-data-item">
+          <text class="live-data-label">当前比分</text>
+          <text class="live-data-value score">{{ scoreText }}</text>
+        </view>
+        <view class="live-data-item">
+          <text class="live-data-label">半场比分</text>
+          <text class="live-data-value">{{ halfScoreText }}</text>
+        </view>
+        <view class="live-data-item">
+          <text class="live-data-label">比赛时间</text>
+          <text class="live-data-value">{{ match.time || '进行中' }}</text>
+        </view>
+        <view class="live-data-item">
+          <text class="live-data-label">数据更新</text>
+          <text class="live-data-value small">{{ formatTime(match.syncedAt) || '-' }}</text>
+        </view>
+      </view>
+      <view class="live-data-tip">
+        {{ isLive ? '当前仅提供实时赛事数据，暂不支持投注' : (match.status === 'cancelled' ? '比赛已取消，暂不支持投注' : '比赛已结束，暂不支持投注') }}
+      </view>
+    </view>
 
-        <!-- 盘口表格(让球盘/大小球) -->
-        <view class="pankou-table" v-if="sub.handicapPlays">
-          <view class="pk-row pk-head">
-            <text class="pk-col pk-line">盘口</text>
-            <text class="pk-col">{{ sub.name === '让球盘' ? match.teamA : '大球' }}</text>
-            <text class="pk-col">{{ sub.name === '让球盘' ? match.teamB : '小球' }}</text>
+    <!-- 未开赛赛事: 玩法与投注 -->
+    <template v-if="isUpcoming">
+      <!-- 大类Tab栏 -->
+      <scroll-view scroll-x class="category-tabs" :show-scrollbar="false">
+        <view class="tab-item" :class="{ active: activeTab === 'all' }" @click="activeTab = 'all'">全部玩法</view>
+        <view
+          v-for="cat in categoryPlays"
+          :key="cat.name"
+          class="tab-item"
+          :class="{ active: activeTab === cat.name }"
+          @click="activeTab = cat.name"
+        >{{ cat.name }}</view>
+      </scroll-view>
+
+      <!-- 玩法区: 大类 → 小类 -->
+      <view class="play-section" v-for="bigCat in displayCategories" :key="bigCat.name">
+        <view class="big-cat-title" v-if="activeTab === 'all'">{{ bigCat.name }}</view>
+
+        <view class="sub-category" v-for="sub in bigCat.subCategories" :key="sub.name">
+          <view class="sub-cat-title">
+            <text>{{ subTitle(sub) }}</text>
+            <text class="rq-hint" v-if="sub.name === '让球胜平负' && rqGoal(sub) !== null">
+              {{ rqGoalCn(sub) }}：{{ rqGoalText(sub) }}
+            </text>
           </view>
-          <view class="pk-row" v-for="row in sub.handicapPlays" :key="row.handicap">
-            <view class="pk-col pk-line">
-              <text class="pk-num">{{ handicapText(row.handicap, sub.name) }}</text>
-              <text class="pk-cn" v-if="sub.name !== '大小球'">{{ rqHandicapCn(row.handicap) }}</text>
+
+          <!-- 盘口表格(让球盘/大小球) -->
+          <view class="pankou-table" v-if="sub.handicapPlays">
+            <view class="pk-row pk-head">
+              <text class="pk-col pk-line">盘口</text>
+              <text class="pk-col">{{ sub.name === '让球盘' ? match.teamA : '大球' }}</text>
+              <text class="pk-col">{{ sub.name === '让球盘' ? match.teamB : '小球' }}</text>
             </view>
-            <view class="pk-col pk-cell" v-if="row.home" :class="{ selected: selectedPlay._id === row.home._id }" @click="selectPlay(row.home)">
-              <text class="pk-water">{{ fmtOdds(row.home.water || row.home.odds) }}</text>
+            <view class="pk-row" v-for="row in sub.handicapPlays" :key="row.handicap">
+              <view class="pk-col pk-line">
+                <text class="pk-num">{{ handicapText(row.handicap, sub.name) }}</text>
+                <text class="pk-cn" v-if="sub.name !== '大小球'">{{ rqHandicapCn(row.handicap) }}</text>
+              </view>
+              <view class="pk-col pk-cell" v-if="row.home" :class="{ selected: selectedPlay._id === row.home._id }" @click="selectPlay(row.home)">
+                <text class="pk-water">{{ fmtOdds(row.home.water || row.home.odds) }}</text>
+              </view>
+              <view class="pk-col pk-cell empty" v-else><text>-</text></view>
+              <view class="pk-col pk-cell" v-if="row.away" :class="{ selected: selectedPlay._id === row.away._id }" @click="selectPlay(row.away)">
+                <text class="pk-water">{{ fmtOdds(row.away.water || row.away.odds) }}</text>
+              </view>
+              <view class="pk-col pk-cell empty" v-else><text>-</text></view>
             </view>
-            <view class="pk-col pk-cell empty" v-else><text>-</text></view>
-            <view class="pk-col pk-cell" v-if="row.away" :class="{ selected: selectedPlay._id === row.away._id }" @click="selectPlay(row.away)">
-              <text class="pk-water">{{ fmtOdds(row.away.water || row.away.odds) }}</text>
+          </view>
+
+          <!-- 普通玩法宫格 -->
+          <view v-else class="play-grid" :style="{ gridTemplateColumns: getGridColumns(sub.plays.length) }">
+            <view
+              class="play-item"
+              v-for="play in sub.plays"
+              :key="play._id"
+              @click="selectPlay(play)"
+              :class="{ selected: selectedPlay._id === play._id, disabled: play.odds === null }"
+            >
+              <text class="play-name">{{ play.name }}</text>
+              <text class="play-odds">{{ fmtOdds(play.odds) }}</text>
             </view>
-            <view class="pk-col pk-cell empty" v-else><text>-</text></view>
+          </view>
+        </view>
+      </view>
+
+      <!-- 空状态 -->
+      <view class="empty" v-if="categoryPlays.length === 0 && loaded">
+        <text v-if="matchMissing">赛事不存在或已下架</text>
+        <text v-else>该赛事暂无玩法</text>
+      </view>
+
+      <!-- 串关提示条 -->
+      <view class="cart-notice" v-if="isMatchInCart">
+        <text>📌 该场次已在串关列表中</text>
+        <text class="cart-notice-action" @click="removeFromCart">移出串关</text>
+      </view>
+      <view class="cart-notice success" v-else-if="cartCount > 0">
+        <text>当前串关单已有 {{ cartCount }} 场，可继续选择其他场次</text>
+      </view>
+
+      <!-- 底部下单栏 -->
+      <view class="bottom-bar">
+        <view class="no-select" v-if="!selectedPlay._id && !isMatchInCart">
+          <text class="hint">请选择一个玩法</text>
+        </view>
+
+        <view class="action-row" v-if="isMatchInCart">
+          <view class="selected-info">
+            <text class="sel-play cart-added-text">已在串关列表中</text>
+          </view>
+          <view class="btn-group">
+            <button class="bet-btn parlay remove" @click="removeFromCart">移出串关</button>
           </view>
         </view>
 
-        <!-- 普通玩法宫格 -->
-        <view v-else class="play-grid" :style="{ gridTemplateColumns: getGridColumns(sub.plays.length) }">
-          <view
-            class="play-item"
-            v-for="play in sub.plays"
-            :key="play._id"
-            @click="selectPlay(play)"
-            :class="{ selected: selectedPlay._id === play._id, disabled: play.odds === null }"
-          >
-            <text class="play-name">{{ play.name }}</text>
-            <text class="play-odds">{{ fmtOdds(play.odds) }}</text>
+        <view class="action-row" v-else-if="selectedPlay._id">
+          <view class="selected-info">
+            <text class="sel-play">
+              {{ selectedDisplayName }}
+              <text class="sel-cn" v-if="selectedHandicapCn">{{ selectedHandicapCn }}</text>
+            </text>
+            <text class="sel-odds">@{{ selectedOddsText }}</text>
+          </view>
+          <view class="btn-group">
+            <button class="bet-btn single" @click="singleBet">单关下注</button>
+            <button class="bet-btn parlay" @click="addToCart">加入串关</button>
           </view>
         </view>
-      </view>
-    </view>
 
-    <!-- 空状态 -->
-    <view class="empty" v-if="categoryPlays.length === 0 && loaded">
-      <text v-if="matchMissing">赛事不存在或已下架</text>
-      <text v-else>该赛事暂无玩法</text>
-    </view>
-
-    <!-- 串关提示条 -->
-    <view class="cart-notice" v-if="isMatchInCart">
-      <text>📌 该场次已在串关列表中</text>
-      <text class="cart-notice-action" @click="removeFromCart">移出串关</text>
-    </view>
-    <view class="cart-notice success" v-else-if="cartCount > 0">
-      <text>当前串关单已有 {{ cartCount }} 场，可继续选择其他场次</text>
-    </view>
-
-    <!-- 底部下单栏 -->
-    <view class="bottom-bar">
-      <view class="no-select" v-if="!selectedPlay._id && !isMatchInCart">
-        <text class="hint">请选择一个玩法</text>
-      </view>
-
-      <view class="action-row" v-if="isMatchInCart">
-        <view class="selected-info">
-          <text class="sel-play cart-added-text">已在串关列表中</text>
-        </view>
-        <view class="btn-group">
-          <button class="bet-btn parlay remove" @click="removeFromCart">移出串关</button>
+        <!-- 串关购物车指示条 -->
+        <view class="cart-bar" v-if="cartCount > 0" @click="showCartBet">
+          <text class="cart-icon">🛒</text>
+          <text class="cart-text">串关单 ({{ cartCount }}场) 赔率 {{ cartTotalOdds.toFixed(2) }}</text>
+          <text class="cart-arrow">›</text>
         </view>
       </view>
 
-      <view class="action-row" v-else-if="selectedPlay._id">
-        <view class="selected-info">
-          <text class="sel-play">
-            {{ selectedDisplayName }}
-            <text class="sel-cn" v-if="selectedHandicapCn">{{ selectedHandicapCn }}</text>
-          </text>
-          <text class="sel-odds">@{{ selectedOddsText }}</text>
-        </view>
-        <view class="btn-group">
-          <button class="bet-btn single" @click="singleBet">单关下注</button>
-          <button class="bet-btn parlay" @click="addToCart">加入串关</button>
-        </view>
-      </view>
+      <!-- 单关下注弹窗 -->
+      <bet-sheet
+        :visible="showSingleSheet"
+        :matchInfo="match"
+        :selectedPlays="selectedPlay._id ? [selectedPlay] : []"
+        :isParlay="false"
+        :loading="singleSubmitting"
+        :errorText="singleError"
+        @confirm="handleSingleConfirm"
+        @cancel="showSingleSheet = false"
+      />
 
-      <!-- 串关购物车指示条 -->
-      <view class="cart-bar" v-if="cartCount > 0" @click="showCartBet">
-        <text class="cart-icon">🛒</text>
-        <text class="cart-text">串关单 ({{ cartCount }}场) 赔率 {{ cartTotalOdds.toFixed(2) }}</text>
-        <text class="cart-arrow">›</text>
-      </view>
-    </view>
-
-    <!-- 单关下注弹窗 -->
-    <bet-sheet
-      :visible="showSingleSheet"
-      :matchInfo="match"
-      :selectedPlays="selectedPlay._id ? [selectedPlay] : []"
-      :isParlay="false"
-      :loading="singleSubmitting"
-      :errorText="singleError"
-      @confirm="handleSingleConfirm"
-      @cancel="showSingleSheet = false"
-    />
-
-    <!-- 串关下注弹窗 -->
-    <bet-sheet
-      :visible="showCartSheet"
-      :matchInfo="{}"
-      :selectedPlays="cartItems"
-      :isParlay="true"
-      :loading="cartSubmitting"
-      :errorText="cartError"
-      @confirm="handleCartConfirm"
-      @cancel="showCartSheet = false"
-      @removePlay="onCartRemovePlay"
-    />
+      <!-- 串关下注弹窗 -->
+      <bet-sheet
+        :visible="showCartSheet"
+        :matchInfo="{}"
+        :selectedPlays="cartItems"
+        :isParlay="true"
+        :loading="cartSubmitting"
+        :errorText="cartError"
+        @confirm="handleCartConfirm"
+        @cancel="showCartSheet = false"
+        @removePlay="onCartRemovePlay"
+      />
+    </template>
   </view>
 </template>
 
@@ -187,6 +226,21 @@ const loaded = ref(false)
 const matchMissing = ref(false)
 const currentOddsVersion = ref(0)
 const activeTab = ref('all')
+
+const isLive = computed(() => match.value.status === 'live')
+const isUpcoming = computed(() => match.value.status === 'upcoming')
+const isStarted = computed(() => ['live', 'finished', 'settled', 'cancelled'].indexOf(match.value.status) >= 0)
+const scoreText = computed(() => {
+  const h = match.value.homeScore
+  const g = match.value.guestScore
+  return (h === undefined || h === null ? 0 : h) + ' : ' + (g === undefined || g === null ? 0 : g)
+})
+const halfScoreText = computed(() => {
+  const h = match.value.homeHalfScore
+  const g = match.value.guestHalfScore
+  if (h === undefined || h === null || g === undefined || g === null) return '-'
+  return h + ' : ' + g
+})
 
 const cartCount = computed(() => betCart.count)
 const cartTotalOdds = computed(() => betCart.totalOdds)
@@ -462,6 +516,7 @@ function findAllPlays(matchData) {
 }
 
 let pollingMatchId = ''
+let liveRefreshTimer = null
 
 onLoad(async (options) => {
   const matchId = options.id
@@ -478,15 +533,29 @@ onLoad(async (options) => {
       await fetchMatchData(matchId)
     }
   })
+
+  // 赔率不变时，进行中赛事的比分/比赛分钟仍需刷新
+  liveRefreshTimer = setInterval(() => {
+    if (match.value.status === 'live') fetchMatchData(matchId)
+  }, 60 * 1000)
 })
 
 onUnload(() => {
   stopPolling()
+  if (liveRefreshTimer) {
+    clearInterval(liveRefreshTimer)
+    liveRefreshTimer = null
+  }
 })
 </script>
 
 <style lang="scss" scoped>
-.match-detail { min-height: 100vh; background: #f0f2f5; padding-bottom: 180rpx; }
+.match-detail {
+  min-height: 100vh;
+  background: #f0f2f5;
+  padding-bottom: 180rpx;
+  &.live-only { padding-bottom: 40rpx; }
+}
 
 .match-info {
   background: linear-gradient(135deg, #1a237e, #0d47a1);
@@ -496,6 +565,10 @@ onUnload(() => {
     margin-bottom: 20rpx;
     .cc-tag { font-size: 22rpx; background: rgba(255,255,255,0.2); padding: 4rpx 14rpx; border-radius: 10rpx; }
     .league { font-size: 26rpx; opacity: 0.9; }
+    .live-tag {
+      font-size: 22rpx; color: #fff; background: #ff3b30;
+      padding: 4rpx 14rpx; border-radius: 10rpx; font-weight: bold;
+    }
     .state { font-size: 22rpx; color: #ffcdd2; }
   }
   .teams { display: flex; justify-content: center; align-items: center; gap: 30rpx; }
@@ -505,9 +578,68 @@ onUnload(() => {
   }
   .vs-box { display: flex; flex-direction: column; align-items: center;
     .vs { font-size: 40rpx; font-weight: bold; }
+    .live-score { font-size: 44rpx; font-weight: bold; color: #ffcdd2; white-space: nowrap; }
     .time { font-size: 24rpx; opacity: 0.85; margin-top: 8rpx; }
   }
   .sync-time { display: block; margin-top: 16rpx; font-size: 22rpx; opacity: 0.7; }
+}
+
+.live-data {
+  margin: 16rpx 20rpx 0;
+  padding: 22rpx 24rpx 18rpx;
+  background: #fff;
+  border-radius: 16rpx;
+  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.04);
+
+  .live-data-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 18rpx;
+  }
+  .live-data-title {
+    display: flex;
+    align-items: center;
+    gap: 10rpx;
+    font-size: 28rpx;
+    font-weight: bold;
+    color: #1a1a1a;
+    .live-dot {
+      color: #bbb; font-size: 20rpx; line-height: 1;
+      &.on { color: #ff3b30; }
+    }
+  }
+  .live-data-state { font-size: 22rpx; color: #ff3b30; font-weight: bold; }
+
+  .live-data-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12rpx;
+  }
+  .live-data-item {
+    width: calc(50% - 6rpx);
+    box-sizing: border-box;
+    padding: 14rpx 16rpx;
+    background: #f7f8fa;
+    border-radius: 12rpx;
+    display: flex;
+    flex-direction: column;
+    gap: 6rpx;
+  }
+  .live-data-label { font-size: 20rpx; color: #999; }
+  .live-data-value {
+    font-size: 28rpx;
+    color: #1a1a1a;
+    font-weight: bold;
+    &.score { color: #ff3b30; font-size: 32rpx; }
+    &.small { font-size: 22rpx; font-weight: normal; color: #666; }
+  }
+  .live-data-tip {
+    margin-top: 16rpx;
+    font-size: 20rpx;
+    color: #999;
+    text-align: center;
+  }
 }
 
 // ============ 大类Tab栏 ============

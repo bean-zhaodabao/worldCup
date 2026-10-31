@@ -5,6 +5,7 @@
 //  - 单关: 全部玩法(胜平负/让球胜平负/比分/总进球/半全场/让球盘/大小球)均可单关
 //  - 串关: 2~8场, 同场只能选1个玩法, 不同玩法类型可混合, 赔率相乘
 //  - 停售(stop)/下架/已开赛/未上架/数据过期(>10分钟未同步) → 拒绝
+//  - 进行中赛事: 当前不支持下注(仅移动端展示实时比分); LIVE_BET_READY 默认关闭
 //  - 散户: 校验余额并扣款(余额不足拒绝); 收单账户: 不校验余额, 流水照记(可为负数)
 //  - 下注限额(minBet/maxBet)仅限散户
 const db = uniCloud.database()
@@ -13,6 +14,12 @@ const { success, fail, verifyToken, generateOrderNo } = require('./utils')
 
 const MAX_PARLAY = 8
 const STALE_MS = 10 * 60 * 1000
+const LIVE_BET_CUTOFF_MINUTE = 85
+const LIVE_ODDS_MAX_AGE_MS = 2 * 60 * 1000
+const LIVE_MAX_ELAPSED_MS = 150 * 60 * 1000
+const LIVE_SUB_CATEGORIES = ['让球盘', '大小球']
+// vipc 盘口为赛前盘, 暂无实时滚球赔率源; 接入后与 sync-jczq/user-match 同步打开
+const LIVE_BET_READY = false
 
 function round2(n) { return Math.round(n * 100) / 100 }
 
@@ -147,16 +154,63 @@ exports.main = async (event, context) => {
       matchMap[mId] = m
     }
 
+    // 滚球下注需要校验玩法分类(让球盘/大小球), 防止伪造 sourceKey
+    const hasLivePlay = orderedPlays.some(p => matchMap[p.matchId].status === 'live')
+    const categoryIds = hasLivePlay ? [...new Set(orderedPlays.map(p => p.categoryId).filter(Boolean))] : []
+    const catRes = categoryIds.length
+      ? await db.collection('play-categories').where({ _id: cmd.in(categoryIds), deleted: cmd.neq(true) }).get()
+      : { data: [] }
+    const catNameMap = {}
+    for (const c of catRes.data || []) catNameMap[c._id] = c.name
+
     for (const play of orderedPlays) {
       const match = matchMap[play.matchId]
+      const isLive = match.status === 'live'
+      const matchLabel = match.name || match.teamA + ' vs ' + match.teamB
       // 下架/停售
       if (play.deleted) return fail('玩法「' + play.name + '」已下架')
       if (play.stop) return fail('玩法「' + play.name + '」已停售')
       // 赛事状态/上架/开赛截止
-      if (match.online === false) return fail('赛事已下架: ' + (match.name || match.teamA + ' vs ' + match.teamB))
-      if (match.status !== 'upcoming') return fail('赛事已开始或已结束，不可下注: ' + (match.name || match.teamA + ' vs ' + match.teamB))
-      if (new Date(match.startTime) <= now) return fail('赛事已开始，不可下注: ' + (match.name || match.teamA + ' vs ' + match.teamB))
-      if (match.displayState && match.displayState !== '未开始') return fail('赛事状态异常(' + match.displayState + ')，不可下注')
+      if (match.online === false) return fail('赛事已下架: ' + matchLabel)
+      if (!isLive && match.status !== 'upcoming') return fail('赛事已开始或已结束，不可下注: ' + matchLabel)
+      if (!isLive && new Date(match.startTime) <= now) return fail('赛事已开始，不可下注: ' + matchLabel)
+
+      if (isLive) {
+        if (!LIVE_BET_READY) return fail('滚球暂未开放，请稍后再试')
+        // 滚球只开放亚盘/大小球, 且一期只支持单关
+        if (isParlay || orderedPlays.length > 1) return fail('滚球玩法仅支持单关，暂不支持串关')
+        if (LIVE_SUB_CATEGORIES.indexOf(catNameMap[play.categoryId]) < 0 ||
+          !/^(asia|dxq):/.test(String(play.sourceKey || ''))) {
+          return fail('该玩法滚球期间已停售')
+        }
+        if (match.displayState && /(完场|取消|推迟|中断|腰斩|加时|点球)/.test(match.displayState)) {
+          return fail('赛事已结束或暂停，不可下注: ' + matchLabel)
+        }
+        if (match.homeScore === undefined || match.homeScore === null ||
+          match.guestScore === undefined || match.guestScore === null) {
+          return fail('赛事比分异常，暂不可下注: ' + matchLabel)
+        }
+        // 85分钟后停止滚球下注(加时/点球盘不开放)
+        const minuteMatch = String(match.time || '').match(/\d+/)
+        const liveMinute = minuteMatch ? parseInt(minuteMatch[0], 10) : NaN
+        if (Number.isFinite(liveMinute) && liveMinute >= LIVE_BET_CUTOFF_MINUTE) {
+          return fail('滚球已到 ' + LIVE_BET_CUTOFF_MINUTE + ' 分钟，停止下注')
+        }
+        // 兜底: 数据异常时避免长时间停留在 live 的赛事继续接单
+        const startedAt = new Date(match.startTime).getTime()
+        if (Number.isFinite(startedAt) && now.getTime() - startedAt > LIVE_MAX_ELAPSED_MS) {
+          return fail('赛事数据超时，滚球已停止下注')
+        }
+        if (new Date(match.startTime) > now) return fail('赛事尚未开赛，暂不可滚球下注')
+        // 盘口必须新鲜: 同步失败/停止更新超过 2 分钟则拒绝
+        const updatedAt = play.updateTime ? new Date(play.updateTime).getTime() : 0
+        if (!updatedAt || now.getTime() - updatedAt > LIVE_ODDS_MAX_AGE_MS) {
+          return fail('滚球盘口已更新，请刷新后重试')
+        }
+      } else if (match.displayState && match.displayState !== '未开始') {
+        return fail('赛事状态异常(' + match.displayState + ')，不可下注')
+      }
+
       // 数据过期保护(同步超过10分钟未更新则暂停投注)
       if (match.syncedAt && (now.getTime() - new Date(match.syncedAt).getTime()) > STALE_MS) return fail('赛事数据暂未更新，请稍后再试')
     }
