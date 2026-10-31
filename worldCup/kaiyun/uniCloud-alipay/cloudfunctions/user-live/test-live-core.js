@@ -12,6 +12,7 @@ const {
   buildLiveEntries,
   matchScore,
   matchMatches,
+  filterMatchedEntries,
   pickPlayUrls,
   pickDefaultQuality,
   extractRoomDetail
@@ -117,6 +118,14 @@ const hits = matchMatches([myMatch], entries, now)
 eq(hits.length, 1, '匹配到 1 场')
 eq(hits[0].matchId, 'my1', '返回我方 matchId')
 eq(hits[0].entry.matchId, '13131666', '返回斗球 matchId')
+
+// 首页顶部直播源只保留本系统赛事库里存在的场次
+eq(
+  filterMatchedEntries([myMatch], entries, now).map(e => e.matchId),
+  ['13131666'],
+  '本系统不存在的赛事直播源被过滤'
+)
+eq(filterMatchedEntries([], entries, now).length, 0, '本系统没有赛事时直播源全部过滤')
 
 eq(matchScore({ ...myMatch, teamB: '科林蒂安' }, gremio, now), 0, '客队不一致 => 不匹配')
 eq(matchScore({ ...myMatch, startTime: new Date(now + 8 * 60 * 60 * 1000) }, gremio, now), 0, '距开赛 8 小时(无官方时间) => 不匹配')

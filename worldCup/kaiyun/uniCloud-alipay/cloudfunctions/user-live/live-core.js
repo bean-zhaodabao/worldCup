@@ -317,6 +317,18 @@ function matchMatches(myMatches, entries, nowMs) {
   return result
 }
 
+/**
+ * 只保留能匹配到我方赛事的斗球直播场次。
+ * 用于首页顶部「正在直播」列表，避免展示本系统赛事库里不存在的比赛。
+ */
+function filterMatchedEntries(myMatches, entries, nowMs) {
+  const matchedIds = {}
+  for (const hit of matchMatches(myMatches, entries, nowMs)) {
+    matchedIds[hit.entry.matchId] = true
+  }
+  return (entries || []).filter(e => matchedIds[e.matchId])
+}
+
 /** 从 playAddr 中筛出 m3u8 直链（FLV/RTMP 移动端不用） */
 function pickPlayUrls(playAddr) {
   const out = {}
@@ -372,6 +384,7 @@ module.exports = {
   buildLiveEntries,
   matchScore,
   matchMatches,
+  filterMatchedEntries,
   pickPlayUrls,
   pickDefaultQuality,
   extractRoomDetail

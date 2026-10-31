@@ -103,6 +103,10 @@
             <text class="info-value amount">{{ money(order.betAmount) }}元</text>
           </view>
           <view class="info-row">
+            <text class="info-label">可赢额</text>
+            <text class="info-value amount winnable">{{ money(winnableOf(order)) }}元</text>
+          </view>
+          <view class="info-row">
             <text class="info-label settle-label">结算</text>
             <text class="info-value settle-value" :class="stateOf(order)">{{ settleText(order) }}</text>
           </view>
@@ -230,6 +234,13 @@ const money = (v) => {
   const n = Number(v) || 0
   const sign = n < 0 ? '-' : ''
   return sign + Math.abs(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+}
+
+/** 可赢额(净赢)，与订单详情保持一致 */
+const winnableOf = (order) => {
+  const bet = Number(order.betAmount) || 0
+  const odds = Number(order.totalOdds) || 0
+  return bet * odds - bet
 }
 
 const formatTime = (t) => {
@@ -495,6 +506,7 @@ onShow(() => {
   }
   .score { color: #1a237e; font-weight: bold; }
   .amount { font-weight: bold; }
+  .winnable { color: #ef6c00; }
   .settle-label { color: #1a237e; font-weight: 500; }
   .settle-value {
     font-weight: bold;

@@ -21,9 +21,12 @@ const db = uniCloud.database()
 const cmd = db.command
 const { success, fail, verifyToken } = require('./utils')
 const {
+  TIME_WINDOW_MS,
+  LIVE_PRE_GAME_WINDOW_MS,
   parseNextData,
   buildLiveEntries,
   matchMatches,
+  filterMatchedEntries,
   extractRoomDetail,
   pickDefaultQuality
 } = require('./live-core')
@@ -226,12 +229,51 @@ async function actionList(event) {
   return success({ lives, updatedAt: page.fetchedAt })
 }
 
-/** 当前正在直播的足球场次(用于赛事列表顶部) */
+/**
+ * 拉取与斗球直播场次时间窗重叠的我方赛事，用于判断直播源是否属于本系统赛事。
+ * 无官方开赛时间的场次按 matchScore 规则使用 now ± 6 小时窗口。
+ */
+async function loadMyMatchesNearEntries(entries, nowMs) {
+  let lower = nowMs - TIME_WINDOW_MS
+  let upper = nowMs + TIME_WINDOW_MS
+  for (const entry of entries) {
+    if (!entry.matchTime) {
+      lower = Math.min(lower, nowMs - LIVE_PRE_GAME_WINDOW_MS)
+      upper = Math.max(upper, nowMs + LIVE_PRE_GAME_WINDOW_MS)
+      continue
+    }
+    const t = typeof entry.matchTime === 'number' ? entry.matchTime : new Date(entry.matchTime).getTime()
+    if (!isFinite(t)) continue
+    lower = Math.min(lower, t - TIME_WINDOW_MS)
+    upper = Math.max(upper, t + TIME_WINDOW_MS)
+  }
+
+  const res = await db.collection('matches')
+    .where({
+      deleted: cmd.neq(true),
+      startTime: cmd.gte(new Date(lower)).and(cmd.lte(new Date(upper)))
+    })
+    .field({ _id: 1, name: 1, teamA: 1, teamB: 1, startTime: 1, leagueName: 1 })
+    .limit(500)
+    .get()
+  return res.data || []
+}
+
+/** 当前正在直播的足球场次(用于赛事列表顶部)，只保留本系统赛事库里存在的场次 */
 async function actionLive() {
   const page = await getLiveData()
+  const footballEntries = page.entries.filter(e => e.liveTypeName === '足球')
+  if (!footballEntries.length) return success({ groups: [], updatedAt: page.fetchedAt })
+
+  const nowMs = Date.now()
+  const myMatches = await loadMyMatchesNearEntries(footballEntries, nowMs)
+  if (!myMatches.length) return success({ groups: [], updatedAt: page.fetchedAt })
+
+  // 只有能匹配上我方赛事的直播源才展示，避免出现系统里没有的赛事
+  const matchedEntries = filterMatchedEntries(myMatches, footballEntries, nowMs)
+
   const groups = []
-  for (const entry of page.entries) {
-    if (entry.liveTypeName !== '足球') continue
+  for (const entry of matchedEntries) {
     const liveRooms = entry.rooms.filter(r => r.status === 1 && r.hasPlayAddr)
     if (!liveRooms.length) continue
     groups.push({
