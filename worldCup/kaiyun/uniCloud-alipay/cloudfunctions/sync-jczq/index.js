@@ -15,6 +15,8 @@
  *     - 水位为香港盘: 赢=本金×(1+水位), 内部统一存十进制 odds=1+水位
  *  3. 赔率变化 -> matches.oddsVersion++ (移动端2s轮询自动刷新)
  *  4. 进行中赛事: 每轮同步比分/半场比分/比赛分钟, 供移动端展示实时数据
+ *     每分钟拉取单场详情 /i/match/football/{id}/live, 同步比分与技术统计(控球率/射门/角球等)
+ *     列表接口滞后的比分不会覆盖详情/状态接口已同步的最新比分
  *     滚球下注暂无可靠实时赔率源, LIVE_BET_READY 默认关闭
  *  5. 自动结算: 完场赛事按90分钟赛果判定玩法结果, 结算订单并入账钱包
  *     (走盘退本金/半赢半输/取消退款), 无需人工设定
@@ -29,7 +31,8 @@ const cmd = db.command
 const {
   round2, parsePankou, mergePankou, combineOdds, lastOf,
   buildSportteryPlays, buildPankouPlays,
-  computeResult, resultMultiplier, regularScore
+  computeResult, resultMultiplier, regularScore, parseLiveTechnic, shouldKeepScore,
+  shouldKeepLiveData
 } = require('./odds-core')
 
 const UA = 'Mozilla/5.0 (compatible; Baiduspider/2.0; +http://www.baidu.com/search/spider.html)'
@@ -108,7 +111,7 @@ function mapStatus(model) {
   return 'live'
 }
 
-/** 赛事 upsert: 返回 { _id, statusChangedToFinished, cancelled } */
+/** 赛事 upsert: 返回 { _id, doc, statusChangedToFinished, cancelled } */
 async function upsertMatch(model, stats) {
   const exist = await db.collection('matches').where({ sourceMatchId: String(model.matchId) }).limit(1).get()
   const newStatus = mapStatus(model)
@@ -140,13 +143,28 @@ async function upsertMatch(model, stats) {
     const oldStatus = doc.status || 'upcoming'
     const statusAdvanced = newStatus !== oldStatus &&
       (newStatus === 'cancelled' || STATUS_RANK[newStatus] > STATUS_RANK[oldStatus])
+    // 进行中/已完场赛事的比分以 /i/match/football/{id}/live 详情接口和状态接口为准。
+    // 列表接口偶尔滞后, 若在这里覆盖会把已同步的最新比分改回旧值:
+    //   - live -> live: 列表接口可能还是旧比分
+    //   - finished/settled -> 非完场: 列表接口还没推进到完场
+    //   - settled: 已结算, 比分不能再改
+    const keepScoreFields = shouldKeepScore(oldStatus, newStatus, model.displayState)
+    if (keepScoreFields) {
+      delete update.homeScore
+      delete update.guestScore
+      delete update.homeHalfScore
+      delete update.guestHalfScore
+      delete update.time
+      delete update.displayState
+    }
     // 比分/比赛分钟变化也让移动端 2 秒轮询刷新, 用于进行中实时比分展示
-    const scoreChanged = doc.homeScore !== model.homeScore ||
+    const scoreChanged = !keepScoreFields && (
+      doc.homeScore !== model.homeScore ||
       doc.guestScore !== model.guestScore ||
       doc.homeHalfScore !== model.homeHalfScore ||
       doc.guestHalfScore !== model.guestHalfScore ||
       (doc.time || '') !== (model.time || '') ||
-      (doc.displayState || '') !== (model.displayState || '')
+      (doc.displayState || '') !== (model.displayState || ''))
 
     let bumpVersion = false
     if (statusAdvanced) {
@@ -158,7 +176,7 @@ async function upsertMatch(model, stats) {
 
     await db.collection('matches').doc(doc._id).update(update)
     stats.matchesUpdated++
-    return { _id: doc._id, statusChangedToFinished: (newStatus === 'finished' && oldStatus !== 'finished' && oldStatus !== 'settled'), cancelled: newStatus === 'cancelled', settledAlready: oldStatus === 'settled' }
+    return { _id: doc._id, doc, statusChangedToFinished: (newStatus === 'finished' && oldStatus !== 'finished' && oldStatus !== 'settled'), cancelled: newStatus === 'cancelled', settledAlready: oldStatus === 'settled' }
   }
 
   const add = Object.assign({
@@ -171,7 +189,7 @@ async function upsertMatch(model, stats) {
   }, common)
   const res = await db.collection('matches').add(add)
   stats.matchesAdded++
-  return { _id: res.id, statusChangedToFinished: false, cancelled: newStatus === 'cancelled', settledAlready: false }
+  return { _id: res.id, doc: Object.assign({ _id: res.id }, add), statusChangedToFinished: false, cancelled: newStatus === 'cancelled', settledAlready: false }
 }
 
 /** 去掉 undefined 字段, 避免 DB 写入报错 */
@@ -253,6 +271,101 @@ async function reconcileLivePlays(matchId, currentPankouKeys, stats, oddsChanged
   if (stopped > 0) {
     stats.livePlaysStopped += stopped
     oddsChangedMatchIds.add(matchId)
+  }
+}
+
+/** 比分字段转数字; 缺失返回 null (0 是有效比分) */
+function toScore(v) {
+  if (v === undefined || v === null || v === '') return null
+  const n = Number(v)
+  return isFinite(n) ? n : null
+}
+
+/**
+ * 同步进行中赛事的实时详情: 技术统计 + 比分/半场比分/比赛分钟/状态
+ * 接口: GET /i/match/football/{matchId}/live
+ * 该接口比赛事列表接口更实时, 作为实时比分的第二数据来源, 避免列表/status 接口滞后导致比分不动。
+ * 失败只记日志, 不影响赛事/赔率同步与下单。
+ */
+async function syncLiveStats(model, internalId, stats, current) {
+  const mid = String(model.matchId)
+  const now = new Date()
+  try {
+    const data = await fetchJson(
+      BASE + '/i/match/football/' + mid + '/live?_=' + Date.now(),
+      BASE + '/live/football/' + mid,
+      1
+    )
+    const cur = current || {}
+    // 已结算赛事比分不可再改; 已完场赛事只接受详情接口确认完场后的最终比分
+    if (cur.status === 'settled') return
+    const newStatus = mapStatus(data)
+    if (cur.status === 'finished' && newStatus !== 'finished') return
+
+    const patch = {}
+    let scoreChanged = false
+
+    const technic = parseLiveTechnic(data)
+    if (technic.length) {
+      patch.liveStats = technic
+      patch.liveStatsAt = now
+    }
+
+    // 状态单调推进(完场等)
+    const oldStatus = cur.status || 'upcoming'
+    const statusAdvanced = newStatus !== oldStatus &&
+      (newStatus === 'cancelled' || STATUS_RANK[newStatus] > STATUS_RANK[oldStatus])
+    if (statusAdvanced) patch.status = newStatus
+
+    // 进行中赛事多源混用时, 旧数据(如 status 比详情慢 1 分钟)不能回退比分/分钟
+    const staleLive = oldStatus === 'live' && newStatus === 'live' && shouldKeepLiveData(cur, data)
+
+    if (!staleLive) {
+      // 比分/比赛分钟以详情接口为准
+      const homeScore = toScore(data.homeScore)
+      if (homeScore !== null && homeScore !== cur.homeScore) {
+        patch.homeScore = homeScore
+        scoreChanged = true
+      }
+      const guestScore = toScore(data.guestScore)
+      if (guestScore !== null && guestScore !== cur.guestScore) {
+        patch.guestScore = guestScore
+        scoreChanged = true
+      }
+      const homeHalfScore = toScore(data.homeHalfScore)
+      if (homeHalfScore !== null && homeHalfScore !== cur.homeHalfScore) {
+        patch.homeHalfScore = homeHalfScore
+        scoreChanged = true
+      }
+      const guestHalfScore = toScore(data.guestHalfScore)
+      if (guestHalfScore !== null && guestHalfScore !== cur.guestHalfScore) {
+        patch.guestHalfScore = guestHalfScore
+        scoreChanged = true
+      }
+      const time = data.time === undefined || data.time === null ? '' : String(data.time)
+      if (time && time !== (cur.time || '')) {
+        patch.time = time
+        scoreChanged = true
+      }
+      const displayState = data.displayState ? String(data.displayState) : ''
+      if (displayState && displayState !== (cur.displayState || '')) {
+        patch.displayState = displayState
+        scoreChanged = true
+      }
+    }
+
+    if (!Object.keys(patch).length) return
+
+    patch.updateTime = now
+    if (scoreChanged || statusAdvanced) {
+      patch.syncedAt = now
+      // 让移动端 2 秒轮询感知比分/状态变化
+      patch.oddsVersion = cmd.inc(1)
+    }
+    await db.collection('matches').doc(internalId).update(patch)
+    stats.liveStatsSynced++
+  } catch (e) {
+    stats.errors.push('实时详情失败 ' + mid + ': ' + e.message)
   }
 }
 
@@ -585,7 +698,7 @@ async function doSync(lastFullOddsAt, forceFull) {
     matchesAdded: 0, matchesUpdated: 0, playsAdded: 0, playsUpdated: 0,
     oddsChangedMatches: 0, settledOrders: 0, refunded: 0, pendingPlays: 0,
     expiredMatches: 0, legacyGoalsStopped: 0,
-    liveMatchesSynced: 0, livePlaysStopped: 0, livePaused: 0, fullOddsSynced: false,
+    liveMatchesSynced: 0, liveStatsSynced: 0, livePlaysStopped: 0, livePaused: 0, fullOddsSynced: false,
     errors: []
   }
   const oddsChangedMatchIds = new Set()
@@ -623,13 +736,27 @@ async function doSync(lastFullOddsAt, forceFull) {
     }
   }
 
-  // 4. 进行中赛事: 只有接入实时滚球赔率源后才同步滚球盘
-  if (LIVE_BET_READY) {
-    const liveModels = models.filter(m => mapStatus(m) === 'live' && matchMap[String(m.matchId)])
-    await runPool(liveModels, ODDS_SYNC_CONCURRENCY, async (model) => {
+  // 4. 实时详情: 进行中赛事每分钟同步技术统计/比分;
+  //    开赛 2 小时内仍显示"未开始"的赛事也拉一次详情, 防止列表接口状态滞后导致一直不下发实时比分。
+  //    只有接入实时滚球赔率源后才同步滚球盘。
+  const nowMs = Date.now()
+  const detailModels = models.filter(m => {
+    if (!matchMap[String(m.matchId)]) return false
+    const st = mapStatus(m)
+    if (st === 'live') return true
+    if (st !== 'upcoming') return false
+    const t = new Date(String(m.matchTime).replace(' ', 'T') + '+08:00').getTime()
+    return isFinite(t) && t <= nowMs && nowMs - t <= 2 * 60 * 60 * 1000
+  })
+  if (detailModels.length) {
+    await runPool(detailModels, ODDS_SYNC_CONCURRENCY, async (model) => {
       const mid = String(model.matchId)
-      await syncLivePankou(model, matchMap[mid]._id, catIds, stats, oddsChangedMatchIds)
-      stats.liveMatchesSynced++
+      const internalId = matchMap[mid]._id
+      await syncLiveStats(model, internalId, stats, matchMap[mid].doc)
+      if (LIVE_BET_READY && mapStatus(model) === 'live') {
+        await syncLivePankou(model, internalId, catIds, stats, oddsChangedMatchIds)
+        stats.liveMatchesSynced++
+      }
       return null
     })
   }

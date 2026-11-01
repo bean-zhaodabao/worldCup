@@ -55,6 +55,24 @@
           <text class="live-data-value small">{{ formatTime(match.syncedAt) || '-' }}</text>
         </view>
       </view>
+      <!-- 技术统计: 控球率/射门/角球等 -->
+      <view class="live-stats" v-if="liveStats.length">
+        <view class="live-stats-head">
+          <text class="live-stats-title">技术统计</text>
+          <text class="live-stats-time" v-if="match.liveStatsAt">更新于 {{ formatTime(match.liveStatsAt) }}</text>
+        </view>
+        <view class="stat-row" v-for="item in liveStats" :key="item.name">
+          <view class="stat-line">
+            <text class="stat-val home">{{ item.home }}</text>
+            <text class="stat-name">{{ item.name }}</text>
+            <text class="stat-val guest">{{ item.guest }}</text>
+          </view>
+          <view class="stat-bar">
+            <view class="stat-bar-home" :style="{ width: statShare(item, 'home') }"></view>
+            <view class="stat-bar-guest" :style="{ width: statShare(item, 'guest') }"></view>
+          </view>
+        </view>
+      </view>
       <view class="live-data-tip">
         {{ isLive ? '当前仅提供实时赛事数据，暂不支持投注' : (match.status === 'cancelled' ? '比赛已取消，暂不支持投注' : '比赛已结束，暂不支持投注') }}
       </view>
@@ -241,6 +259,16 @@ const halfScoreText = computed(() => {
   if (h === undefined || h === null || g === undefined || g === null) return '-'
   return h + ' : ' + g
 })
+const liveStats = computed(() => Array.isArray(match.value.liveStats) ? match.value.liveStats : [])
+
+/** 技术统计条形宽度: 按主客占比归一化(控球率等源数据可能不是 100 份) */
+const statShare = (item, side) => {
+  const home = Number(item.homePercent) || 0
+  const guest = Number(item.guestPercent) || 0
+  const total = home + guest
+  if (total <= 0) return '50%'
+  return ((side === 'home' ? home : guest) / total * 100).toFixed(1) + '%'
+}
 
 const cartCount = computed(() => betCart.count)
 const cartTotalOdds = computed(() => betCart.totalOdds)
@@ -634,6 +662,49 @@ onUnload(() => {
     &.score { color: #ff3b30; font-size: 32rpx; }
     &.small { font-size: 22rpx; font-weight: normal; color: #666; }
   }
+  .live-stats {
+    margin-top: 20rpx;
+    padding-top: 18rpx;
+    border-top: 1rpx solid #f0f0f0;
+
+    .live-stats-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      margin-bottom: 16rpx;
+    }
+    .live-stats-title { font-size: 26rpx; font-weight: bold; color: #1a1a1a; }
+    .live-stats-time { font-size: 20rpx; color: #999; }
+
+    .stat-row {
+      margin-bottom: 14rpx;
+      &:last-child { margin-bottom: 0; }
+    }
+    .stat-line {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6rpx;
+      .stat-val {
+        min-width: 100rpx;
+        font-size: 24rpx;
+        font-weight: bold;
+        &.home { color: #1a237e; text-align: left; }
+        &.guest { color: #d32f2f; text-align: right; }
+      }
+      .stat-name { flex: 1; text-align: center; font-size: 22rpx; color: #666; }
+    }
+    .stat-bar {
+      display: flex;
+      height: 10rpx;
+      border-radius: 6rpx;
+      overflow: hidden;
+      background: #f0f0f0;
+      .stat-bar-home { background: #3949ab; }
+      .stat-bar-guest { background: #e53935; }
+    }
+  }
+
   .live-data-tip {
     margin-top: 16rpx;
     font-size: 20rpx;

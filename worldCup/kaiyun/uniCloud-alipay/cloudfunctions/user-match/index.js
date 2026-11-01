@@ -213,6 +213,9 @@ exports.main = async (event, context) => {
         guestHalfScore: match.guestHalfScore,
         description: match.description || '',
         syncedAt: match.syncedAt,
+        // 进行中赛事技术统计(控球率/射门/角球等), 由 sync-jczq 每分钟更新
+        liveStats: Array.isArray(match.liveStats) ? match.liveStats : [],
+        liveStatsAt: match.liveStatsAt || null,
         liveOddsAt: match.liveOddsAt || null,
         categoryPlays
       })

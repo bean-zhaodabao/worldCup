@@ -6,7 +6,8 @@
 const {
   round2, parsePankou, mergePankou, combineOdds, lastOf,
   buildSportteryPlays, buildPankouPlays,
-  computeResult, resultMultiplier, regularScore
+  computeResult, resultMultiplier, regularScore, parseLiveTechnic, shouldKeepScore,
+  parseMinute, shouldKeepLiveData
 } = require('./odds-core')
 
 let pass = 0, fail = 0
@@ -165,6 +166,66 @@ eq(resultMultiplier('lose', 1.85), 0, '输=0')
 console.log('\n[7] regularScore 加时/点球扣除')
 eq(regularScore({ homeScore: 3, guestScore: 2, homeOtScore: 0, guestOtScore: 0, homeOtPenalty: 0, guestOtPenalty: 0 }), { home: 3, guest: 2 }, '无加时: 3-2')
 eq(regularScore({ homeScore: 2, guestScore: 2, homeOtScore: 1, guestOtScore: 0, homeOtPenalty: 0, guestOtPenalty: 0 }), { home: 1, guest: 2 }, '加时主进1: 90分钟1-2')
+
+// ==================== 8. 进行中技术统计 ====================
+console.log('\n[8] parseLiveTechnic 技术统计解析')
+const liveData = {
+  time: "90'", matchState: -1, displayState: '完场',
+  technic: [
+    { name: '控球率', home: '55%', guest: '45%', homePercent: 55, guestPercent: 45 },
+    { name: '射门', home: '14', guest: '12', homePercent: 54, guestPercent: 46 },
+    { name: '传球成功率', home: '83%', guest: '85%', homePercent: 83, guestPercent: 85 },
+    { name: '角球', home: '5', guest: '4', homePercent: 56, guestPercent: 44 },
+    { name: '', home: '1', guest: '1', homePercent: 50, guestPercent: 50 },
+    null
+  ]
+}
+const technic = parseLiveTechnic(liveData)
+eq(technic.length, 4, '过滤空名称项')
+eq(technic[0], { name: '控球率', home: '55%', guest: '45%', homePercent: 55, guestPercent: 45 }, '控球率解析正确')
+eq(technic[2], { name: '传球成功率', home: '83%', guest: '85%', homePercent: 83, guestPercent: 85 }, '传球成功率保留原始占比')
+eq(parseLiveTechnic({ technic: [{ name: '射正', home: '5', guest: '4' }] })[0].homePercent, 0, '缺失占比补 0')
+eq(parseLiveTechnic({}), [], '无 technic 返回空数组')
+
+// ==================== 9. 列表比分防回退 ====================
+console.log('\n[9] shouldKeepScore 列表接口滞后的比分不覆盖')
+eq(shouldKeepScore('live', 'live', '上半场'), true, 'live -> live 保留最新比分')
+eq(shouldKeepScore('live', 'upcoming', '未开始'), true, 'live -> upcoming(列表滞后) 保留')
+eq(shouldKeepScore('live', 'finished', '完场'), false, 'live -> finished 允许写最终比分')
+eq(shouldKeepScore('finished', 'live', '下半场'), true, 'finished -> live(列表滞后) 保留')
+eq(shouldKeepScore('finished', 'finished', '下半场'), true, 'finished 未完场数据不回退')
+eq(shouldKeepScore('finished', 'finished', '完场'), false, 'finished -> finished(完场) 允许最终比分修正')
+eq(shouldKeepScore('settled', 'finished', '完场'), true, 'settled 永不再改比分')
+eq(shouldKeepScore('upcoming', 'live', '上半场'), false, 'upcoming -> live 正常写入')
+eq(shouldKeepScore('upcoming', 'upcoming', '未开始'), false, 'upcoming -> upcoming 正常写入')
+
+// ==================== 10. 多数据源比分防回退 ====================
+console.log('\n[10] parseMinute / shouldKeepLiveData 多数据源防回退')
+eq(parseMinute("12'"), 12, "12' = 12")
+eq(parseMinute("45+2'"), 45.02, "45+2' = 45.02")
+eq(parseMinute("90+4'"), 90.04, "90+4' = 90.04")
+eq(parseMinute('中场'), null, '中场无法解析')
+eq(
+  shouldKeepLiveData({ time: "12'", homeScore: 1, guestScore: 0 }, { time: "11'", homeScore: 0, guestScore: 0 }),
+  true,
+  '慢 1 分钟的 status 数据不回退比分/分钟'
+)
+eq(
+  shouldKeepLiveData({ time: "12'", homeScore: 1, guestScore: 0 }, { time: "12'", homeScore: 0, guestScore: 0 }),
+  true,
+  '同一分钟进球数变少不回退'
+)
+eq(
+  shouldKeepLiveData({ time: "12'", homeScore: 0, guestScore: 0 }, { time: "12'", homeScore: 1, guestScore: 0 }),
+  false,
+  '同一分钟新进球允许更新'
+)
+eq(
+  shouldKeepLiveData({ time: "12'", homeScore: 0, guestScore: 0 }, { time: "13'", homeScore: 0, guestScore: 0 }),
+  false,
+  '分钟前进允许更新'
+)
+eq(shouldKeepLiveData({ time: '中场', homeScore: 1, guestScore: 0 }, { time: "46'", homeScore: 1, guestScore: 0 }), false, '无分钟时不拦截')
 
 console.log('\n========================================')
 console.log('通过 ' + pass + ' 项, 失败 ' + fail + ' 项')

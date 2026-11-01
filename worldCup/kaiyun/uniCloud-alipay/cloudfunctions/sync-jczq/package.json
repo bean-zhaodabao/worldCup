@@ -1,1 +1,16 @@
-{ "name": "sync-jczq", "version": "1.0.0", "dependencies": {} }
+{
+  "name": "sync-jczq",
+  "version": "1.0.0",
+  "dependencies": {},
+  "cloudfunction-config": {
+    "timeout": 60,
+    "memorySize": 512,
+    "triggers": [
+      {
+        "name": "timer",
+        "type": "timer",
+        "config": "0 */1 * * * * *"
+      }
+    ]
+  }
+}

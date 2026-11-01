@@ -293,10 +293,76 @@ function regularScore(match) {
   return { home: Math.max(0, home), guest: Math.max(0, guest) }
 }
 
+/** 解析比赛分钟: "12'" -> 12, "45+2'" -> 45.02, "90+4'" -> 90.04; 无法解析返回 null */
+function parseMinute(value) {
+  const m = String(value || '').match(/(\d+)(?:\s*\+\s*(\d+))?/)
+  if (!m) return null
+  const base = Number(m[1])
+  const extra = m[2] ? Number(m[2]) : 0
+  return base + Math.min(extra, 99) / 100
+}
+
+/**
+ * 多数据源(status/detail/list)混用时, 判断新数据是否比现有数据旧
+ * 旧数据不能覆盖新数据, 否则会出现比分从 1-0 退回 0-0、比赛分钟倒退。
+ * @returns true 表示应保留现有数据
+ */
+function shouldKeepLiveData(doc, incoming) {
+  const oldMin = parseMinute(doc && doc.time)
+  const newMin = parseMinute(incoming && incoming.time)
+  if (oldMin === null || newMin === null) return false
+  if (newMin < oldMin) return true
+  // 同一分钟: 总进球数变少视为滞后数据(VAR改判等极端情况由完场最终比分覆盖)
+  if (newMin === oldMin) {
+    const oldTotal = (Number(doc.homeScore) || 0) + (Number(doc.guestScore) || 0)
+    const newTotal = (Number(incoming.homeScore) || 0) + (Number(incoming.guestScore) || 0)
+    if (newTotal < oldTotal) return true
+  }
+  return false
+}
+
+/**
+ * 列表接口的比分是否应保留(不覆盖数据库现有比分)
+ * 列表接口偶尔滞后, 不能把状态/详情接口已同步的最新比分改回旧值:
+ * - 已结算: 永远保留
+ * - 进行中: 只接受完场/取消(其余状态视为列表滞后)
+ * - 已完场: 列表还没显示"完场"时保留
+ */
+function shouldKeepScore(oldStatus, newStatus, displayState) {
+  if (oldStatus === 'settled') return true
+  if (oldStatus === 'live' && newStatus !== 'finished' && newStatus !== 'cancelled') return true
+  if (oldStatus === 'finished' && newStatus !== 'cancelled' &&
+    String(displayState || '').indexOf('完场') < 0) return true
+  return false
+}
+
+/**
+ * 解析技术统计接口(/i/match/football/{id}/live)的 technic 数组
+ * 移动端只需要 name/home/guest + 两侧占比, 其余字段丢弃
+ */
+function parseLiveTechnic(data) {
+  const raw = data && Array.isArray(data.technic) ? data.technic : []
+  const list = []
+  for (const item of raw) {
+    if (!item || !item.name) continue
+    const homePercent = Number(item.homePercent)
+    const guestPercent = Number(item.guestPercent)
+    list.push({
+      name: String(item.name).slice(0, 20),
+      home: item.home === undefined || item.home === null ? '-' : String(item.home).slice(0, 12),
+      guest: item.guest === undefined || item.guest === null ? '-' : String(item.guest).slice(0, 12),
+      homePercent: isFinite(homePercent) ? homePercent : 0,
+      guestPercent: isFinite(guestPercent) ? guestPercent : 0
+    })
+  }
+  return list.slice(0, 20)
+}
+
 module.exports = {
   round2, parsePankou, mergePankou,
   BF_NAMES, BQC_NAMES,
   combineOdds, lastOf,
   buildSportteryPlays, buildPankouPlays,
-  computeResult, resultMultiplier, regularScore
+  computeResult, resultMultiplier, regularScore,
+  parseLiveTechnic, shouldKeepScore, parseMinute, shouldKeepLiveData
 }

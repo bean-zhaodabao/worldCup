@@ -65,6 +65,12 @@
     },
     "syncedAt": { "bsonType": "date", "title": "数据同步时间", "description": "用于数据更新时间展示与过期检测" },
     "liveOddsAt": { "bsonType": "date", "title": "滚球盘口同步时间", "description": "仅进行中赛事成功拉取滚球盘口时更新，用于判断滚球盘是否新鲜" },
+    "liveStats": {
+      "bsonType": "array",
+      "title": "进行中赛事技术统计",
+      "description": "控球率/射门/角球等, 由 sync-jczq 每分钟从 vipc /i/match/football/{id}/live 同步"
+    },
+    "liveStatsAt": { "bsonType": "date", "title": "技术统计同步时间" },
     "settledAt": { "bsonType": "date", "title": "结算时间" },
     "createTime": { "bsonType": "date" },
     "updateTime": { "bsonType": "date" },

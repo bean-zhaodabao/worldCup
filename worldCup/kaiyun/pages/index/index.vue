@@ -100,7 +100,7 @@
         <view class="live-bet-row" v-if="match.status === 'live'">
           <view class="live-bet-left">
             <text class="live-bet-tag">进行中</text>
-            <text class="live-bet-markets">实时比分</text>
+            <text class="live-bet-markets">实时比分 · 技术统计</text>
           </view>
           <text class="live-bet-action">查看实时数据 ›</text>
         </view>
@@ -223,7 +223,7 @@ const dateGroups = computed(() => {
 
   const liveMatches = matchList.value.filter(m => m.status === 'live')
   if (liveMatches.length) {
-    groups.push({ key: 'live', label: '进行中', dateText: '实时比分', matches: liveMatches })
+    groups.push({ key: 'live', label: '进行中', dateText: '实时比分 · 技术统计', matches: liveMatches })
   }
 
   for (const m of matchList.value) {
