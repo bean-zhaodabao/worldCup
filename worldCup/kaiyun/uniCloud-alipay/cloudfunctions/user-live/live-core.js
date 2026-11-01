@@ -85,6 +85,16 @@ function normName(s) {
     .replace(/[斗球\/\\站]/g, '')
 }
 
+/**
+ * 队名进一步规范化：把前缀 "FC" 统一挪到末尾。
+ * 竞彩与斗球对同一支队的写法顺序不同（竞彩 "FC首尔" / 斗球 "首尔FC"），
+ * 只做 normName 时两者既不相同也不互相包含，会漏匹配。
+ */
+function canonName(s) {
+  const n = normName(s)
+  return n.length > 2 && n.slice(0, 2) === 'fc' ? n.slice(2) + 'fc' : n
+}
+
 // 常见简称/全称映射（仅做精确名的双向扩展，避免 "巴黎FC" 误匹配 "巴黎圣日耳曼"）
 const TEAM_ALIASES = [
   ['马竞', '马德里竞技'],
@@ -105,6 +115,7 @@ const TEAM_ALIASES = [
 ]
 
 const LEAGUE_ALIASES = [
+  ['韩K1联', '韩K联'],
   ['巴西甲', '巴甲'],
   ['美职业', '美职联'],
   ['欧冠杯', '欧冠'],
@@ -136,12 +147,16 @@ function expandAliases(norm, pairs) {
   return out
 }
 
+// 别名表里的英文/大写 (如 "韩K1联") 必须先归一化，否则永远匹配不上
+const LEAGUE_ALIASES_NORM = LEAGUE_ALIASES.map(pair => [normName(pair[0]), normName(pair[1])])
+
 // 别名简称（巴黎/曼联/曼城…）只允许精确命中，不做包含匹配，
 // 避免 "巴黎" 误命中 "巴黎FC"、"曼联" 误命中 "曼联青年队"
 const TEAM_ALIAS_TERMS = {}
-for (const pair of TEAM_ALIASES) {
-  TEAM_ALIAS_TERMS[normName(pair[0])] = true
-  TEAM_ALIAS_TERMS[normName(pair[1])] = true
+const TEAM_ALIASES_CANON = TEAM_ALIASES.map(pair => [canonName(pair[0]), canonName(pair[1])])
+for (const pair of TEAM_ALIASES_CANON) {
+  TEAM_ALIAS_TERMS[pair[0]] = true
+  TEAM_ALIAS_TERMS[pair[1]] = true
 }
 
 /**
@@ -149,8 +164,8 @@ for (const pair of TEAM_ALIASES) {
  * 精确名会通过别名表扩展，如 "马竞" -> "马德里竞技"
  */
 function nameScore(a, b) {
-  const va = expandAliases(normName(a), TEAM_ALIASES)
-  const vb = expandAliases(normName(b), TEAM_ALIASES)
+  const va = expandAliases(canonName(a), TEAM_ALIASES_CANON)
+  const vb = expandAliases(canonName(b), TEAM_ALIASES_CANON)
   if (!va.length || !vb.length) return 0
   let best = 0
   for (const x of va) {
@@ -165,8 +180,8 @@ function nameScore(a, b) {
 
 /** 联赛一致给 0.05 加分（不参与硬门槛） */
 function leagueScore(a, b) {
-  const va = expandAliases(normName(a), LEAGUE_ALIASES)
-  const vb = expandAliases(normName(b), LEAGUE_ALIASES)
+  const va = expandAliases(normName(a), LEAGUE_ALIASES_NORM)
+  const vb = expandAliases(normName(b), LEAGUE_ALIASES_NORM)
   for (const x of va) {
     for (const y of vb) {
       if (!x || !y) continue
@@ -379,6 +394,7 @@ module.exports = {
   parseNextData,
   parseTitle,
   normName,
+  canonName,
   nameScore,
   leagueScore,
   buildLiveEntries,

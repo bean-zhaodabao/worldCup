@@ -7,6 +7,7 @@ const {
   parseNextData,
   parseTitle,
   normName,
+  canonName,
   nameScore,
   leagueScore,
   buildLiveEntries,
@@ -53,6 +54,10 @@ eq(nameScore('马竞', '马德里竞技'), 0.4, '马竞=马德里竞技')
 eq(nameScore('萨迪纳摩', '萨格勒布迪纳摩'), 0.4, '萨迪纳摩=萨格勒布迪纳摩')
 eq(nameScore('纽约城FC', '纽约城'), 0.35, '包含关系=0.35')
 eq(nameScore('北京国安', '国安'), 0.35, '长名包含短名=0.35')
+eq(canonName('FC首尔'), '首尔fc', '前缀 FC 统一挪到末尾')
+eq(nameScore('FC首尔', '首尔FC'), 0.4, '竞彩 FC首尔 = 斗球 首尔FC')
+eq(nameScore('FC东京', '东京FC'), 0.4, '竞彩 FC东京 = 斗球 东京FC')
+eq(nameScore('FC首尔', '仁川联'), 0, 'FC 规范化不影响无关队名')
 eq(nameScore('巴黎', '巴黎FC'), 0, '别名简称不做包含匹配(巴黎 != 巴黎FC)')
 eq(nameScore('曼联', '曼联青年队'), 0, '别名简称不做包含匹配(曼联 != 曼联青年队)')
 eq(nameScore('格雷米奥', '科林蒂安'), 0, '无关=0')
@@ -60,6 +65,7 @@ eq(nameScore('格雷米奥', '科林蒂安'), 0, '无关=0')
 // ==================== 4. 联赛加分 ====================
 console.log('\n[4] leagueScore')
 eq(leagueScore('巴西甲', '巴甲'), 0.05, '巴西甲=巴甲')
+eq(leagueScore('韩K联', '韩K1联'), 0.05, '韩K联=韩K1联')
 eq(leagueScore('西甲', '西班牙甲级联赛'), 0.05, '西甲=西班牙甲级联赛')
 eq(leagueScore('英超', '西甲'), 0, '不同联赛=0')
 
@@ -138,6 +144,23 @@ const officialEntry = {
 const psgMatch = { _id: 'my2', teamA: '勒阿弗尔', teamB: '巴黎', startTime: new Date(now + 2 * 60 * 60 * 1000), leagueName: '法甲' }
 ok(matchScore(psgMatch, officialEntry, now) >= 0.8, '官方时间 ±2 小时 + 巴黎别名 => 匹配')
 eq(matchScore({ ...psgMatch, startTime: new Date(now + 6 * 60 * 60 * 1000) }, officialEntry, now), 0, '官方时间相差 4 小时 => 不匹配')
+
+// 实测回归: 竞彩 "FC首尔 - 仁川联"(韩K联) vs 斗球 "韩K1联 首尔FC - 仁川联"
+const kLeagueNow = new Date('2026-11-01T15:52:00+08:00').getTime()
+const kLeagueEntry = {
+  matchId: '15023188', hostTeamName: '首尔FC', guestTeamName: '仁川联', leagueName: '韩K1联',
+  matchTime: null, isLive: true, hot: 70900, rooms: []
+}
+const myKLeague = {
+  _id: 'my-k1', teamA: 'FC首尔', teamB: '仁川联', leagueName: '韩K联',
+  startTime: new Date('2026-11-01T15:30:00+08:00')
+}
+eq(matchScore(myKLeague, kLeagueEntry, kLeagueNow), 1, 'FC首尔/韩K联 能匹配 首尔FC/韩K1联')
+eq(
+  filterMatchedEntries([myKLeague], [kLeagueEntry], kLeagueNow).map(e => e.matchId),
+  ['15023188'],
+  '韩K1联 首尔FC-仁川联 进入首页直播列表'
+)
 
 // 歧义：两场同名同队、分数相同 => 跳过
 const dupA = { matchId: 'd1', hostTeamName: '格雷米奥', guestTeamName: '巴拉纳竞技', leagueName: '巴甲', matchTime: null, hot: 10, rooms: [] }
