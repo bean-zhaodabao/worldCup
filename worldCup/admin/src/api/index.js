@@ -123,6 +123,23 @@ export function reviewWithdraw(id, approve, remark) {
   return request.patch('/admin-withdraw/' + id + '/review', { approve, remark })
 }
 
+// ========== 对冲记账 (admin-hedge-record) ==========
+export function getHedgeRecordList(params) {
+  return request.get('/admin-hedge-record', { params })
+}
+export function getHedgeRecordSummary(params) {
+  return request.get('/admin-hedge-record/summary', { params })
+}
+export function createHedgeRecord(data) {
+  return request.post('/admin-hedge-record', data)
+}
+export function updateHedgeRecord(id, data) {
+  return request.put('/admin-hedge-record/' + id, data)
+}
+export function deleteHedgeRecord(id) {
+  return request.delete('/admin-hedge-record/' + id)
+}
+
 // ========== 结算 (admin-settle) ==========
 export function settleMatch(matchId) {
   return request.post('/admin-settle/' + matchId + '/settle')

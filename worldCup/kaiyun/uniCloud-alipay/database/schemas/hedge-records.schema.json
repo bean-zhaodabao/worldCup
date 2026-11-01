@@ -1,0 +1,74 @@
+{
+  "bsonType": "object",
+  "required": ["recordDate", "betAmount", "hedgeAmount"],
+  "properties": {
+    "_id": { "bsonType": "string" },
+    "recordDate": {
+      "bsonType": "date",
+      "title": "记账日期"
+    },
+    "title": {
+      "bsonType": "string",
+      "title": "单号/摘要"
+    },
+    "platform": {
+      "bsonType": "string",
+      "title": "对冲平台"
+    },
+    "betAmount": {
+      "bsonType": "double",
+      "title": "下注金额",
+      "minimum": 0
+    },
+    "hedgeAmount": {
+      "bsonType": "double",
+      "title": "对冲金额",
+      "minimum": 0
+    },
+    "unhedgedAmount": {
+      "bsonType": "double",
+      "title": "未对冲金额",
+      "description": "下注金额 - 对冲金额，由服务端计算"
+    },
+    "unhedgedProfit": {
+      "bsonType": "double",
+      "title": "未对冲盈亏",
+      "description": "可正可负，手工录入"
+    },
+    "hedgeRebate": {
+      "bsonType": "double",
+      "title": "对冲返现",
+      "description": "第三方平台返现，手工录入"
+    },
+    "totalProfit": {
+      "bsonType": "double",
+      "title": "总盈亏",
+      "description": "未对冲盈亏 + 对冲返现，由服务端计算"
+    },
+    "remark": {
+      "bsonType": "string",
+      "title": "备注"
+    },
+    "operatorId": {
+      "bsonType": "string",
+      "title": "操作人ID"
+    },
+    "operatorName": {
+      "bsonType": "string",
+      "title": "操作人名称"
+    },
+    "deleted": {
+      "bsonType": "bool",
+      "title": "逻辑删除",
+      "default": false
+    },
+    "createTime": {
+      "bsonType": "date",
+      "title": "创建时间"
+    },
+    "updateTime": {
+      "bsonType": "date",
+      "title": "更新时间"
+    }
+  }
+}

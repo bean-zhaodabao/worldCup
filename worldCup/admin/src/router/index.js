@@ -85,6 +85,12 @@ const routes = [
         meta: { title: '提现审核', icon: 'Money' }
       },
       {
+        path: 'bookkeeping',
+        name: 'Bookkeeping',
+        component: () => import('@/views/bookkeeping/index.vue'),
+        meta: { title: '对冲记账', icon: 'Notebook' }
+      },
+      {
         path: 'report',
         name: 'Report',
         component: () => import('@/views/report/index.vue'),
