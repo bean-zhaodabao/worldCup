@@ -302,12 +302,39 @@ function parseMinute(value) {
   return base + Math.min(extra, 99) / 100
 }
 
+/** 中场休息时展示/存储的比赛分钟: 固定 45', 不跟随补时继续走 */
+const HALF_TIME_MINUTE = "45'"
+
+/** 是否中场休息(displayState 可能是 "中场" / "中场休息") */
+function isHalfTime(displayState) {
+  return /中场|半场休息/.test(String(displayState || ''))
+}
+
 /**
  * 多数据源(status/detail/list)混用时, 判断新数据是否比现有数据旧
  * 旧数据不能覆盖新数据, 否则会出现比分从 1-0 退回 0-0、比赛分钟倒退。
+ * 中场休息是特例: 源站会把分钟从 45+X 重置为 45, 不能当成回退拦截,
+ * 否则页面会一直停留在上半场补时分钟, 中场状态也永远不更新。
  * @returns true 表示应保留现有数据
  */
 function shouldKeepLiveData(doc, incoming) {
+  const oldDs = String((doc && doc.displayState) || '')
+  const newDs = String((incoming && incoming.displayState) || '')
+  // 进入中场: 允许更新(分钟重置属正常), 由 resolveLiveTime 把分钟固定为 45'
+  // 但已进入下半场/加时/完场后, 再收到中场数据视为源站滞后, 不能退回中场
+  if (isHalfTime(newDs)) {
+    if (/下半场|加时|点球|完场/.test(oldDs)) return true
+    const oldMin = parseMinute(doc && doc.time)
+    if (oldMin !== null && oldMin >= 46) return true
+    return false
+  }
+  // 已在中场, 又收到上半场滞后数据时不允许退回去
+  if (isHalfTime(oldDs)) {
+    const newMin = parseMinute(incoming && incoming.time)
+    if (newDs.indexOf('上半场') >= 0) return true
+    if (newMin !== null && newMin < 45) return true
+  }
+
   const oldMin = parseMinute(doc && doc.time)
   const newMin = parseMinute(incoming && incoming.time)
   if (oldMin === null || newMin === null) return false
@@ -319,6 +346,19 @@ function shouldKeepLiveData(doc, incoming) {
     if (newTotal < oldTotal) return true
   }
   return false
+}
+
+/**
+ * 计算进行中赛事应展示/落库的比赛分钟
+ * 中场休息固定 45', 避免源站补时或下半场提前数据让休息期间的时间继续走;
+ * 其它情况沿用源站分钟, 源站没给则保留现有值。
+ */
+function resolveLiveTime(doc, incoming) {
+  const ds = incoming && incoming.displayState
+  if (isHalfTime(ds)) return HALF_TIME_MINUTE
+  const t = incoming && incoming.time
+  if (t === undefined || t === null) return (doc && doc.time) || ''
+  return String(t)
 }
 
 /**
@@ -364,5 +404,6 @@ module.exports = {
   combineOdds, lastOf,
   buildSportteryPlays, buildPankouPlays,
   computeResult, resultMultiplier, regularScore,
-  parseLiveTechnic, shouldKeepScore, parseMinute, shouldKeepLiveData
+  parseLiveTechnic, shouldKeepScore, parseMinute, shouldKeepLiveData,
+  isHalfTime, resolveLiveTime, HALF_TIME_MINUTE
 }

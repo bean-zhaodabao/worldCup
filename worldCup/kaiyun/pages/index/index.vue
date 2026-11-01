@@ -72,7 +72,7 @@
           <view class="vs-box">
             <text class="vs" v-if="match.status !== 'live'">VS</text>
             <text class="live-score" v-else>{{ scoreText(match) }}</text>
-            <text class="live-minute" v-if="match.status === 'live'">{{ match.time || match.displayState || '进行中' }}</text>
+            <text class="live-minute" v-if="match.status === 'live'">{{ matchTimeText(match) }}</text>
           </view>
           <view class="team">
             <image class="flag" :src="match.teamBFlag || '/static/football.png'" mode="aspectFit"></image>
@@ -201,9 +201,15 @@ const scoreText = (match) => {
   return h + ' : ' + g
 }
 
-/** 进行中显示比赛分钟, 未开赛显示开赛时间 */
+/** 是否中场休息: 此时比赛分钟应停住, 直接展示"中场" */
+const isHalfTime = (match) => /中场|半场休息/.test((match && match.displayState) || '')
+
+/** 进行中显示比赛分钟(中场休息显示"中场"), 未开赛显示开赛时间 */
 const matchTimeText = (match) => {
-  if (match.status === 'live') return match.time || match.displayState || '进行中'
+  if (match.status === 'live') {
+    if (isHalfTime(match)) return '中场'
+    return match.time || match.displayState || '进行中'
+  }
   return timeText(match.startTime)
 }
 

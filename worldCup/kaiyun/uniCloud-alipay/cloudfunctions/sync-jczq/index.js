@@ -32,7 +32,7 @@ const {
   round2, parsePankou, mergePankou, combineOdds, lastOf,
   buildSportteryPlays, buildPankouPlays,
   computeResult, resultMultiplier, regularScore, parseLiveTechnic, shouldKeepScore,
-  shouldKeepLiveData
+  shouldKeepLiveData, isHalfTime, resolveLiveTime, HALF_TIME_MINUTE
 } = require('./odds-core')
 
 const UA = 'Mozilla/5.0 (compatible; Baiduspider/2.0; +http://www.baidu.com/search/spider.html)'
@@ -128,7 +128,9 @@ async function upsertMatch(model, stats) {
     homeHalfScore: model.homeHalfScore, guestHalfScore: model.guestHalfScore,
     homeOtScore: model.homeOtScore || 0, guestOtScore: model.guestOtScore || 0,
     homeOtPenalty: model.homeOtPenalty || 0, guestOtPenalty: model.guestOtPenalty || 0,
-    displayState: model.displayState || '', time: model.time || '',
+    displayState: model.displayState || '',
+    // 中场休息不能继续展示补时分钟, 否则休息期间时间看起来还在走
+    time: isHalfTime(model.displayState) ? HALF_TIME_MINUTE : (model.time || ''),
     description: model.description || '',
     syncedAt: new Date(),
     updateTime: new Date()
@@ -149,6 +151,7 @@ async function upsertMatch(model, stats) {
     //   - finished/settled -> 非完场: 列表接口还没推进到完场
     //   - settled: 已结算, 比分不能再改
     const keepScoreFields = shouldKeepScore(oldStatus, newStatus, model.displayState)
+    let halfTimeAdvanced = false
     if (keepScoreFields) {
       delete update.homeScore
       delete update.guestScore
@@ -156,15 +159,23 @@ async function upsertMatch(model, stats) {
       delete update.guestHalfScore
       delete update.time
       delete update.displayState
+      // 中场是单向状态: 列表接口即使比分滞后, 也允许把中场状态写进来,
+      // 否则移动端会一直停留在上半场补时分钟, 中场期间时间看起来还在走。
+      if (isHalfTime(model.displayState) && !isHalfTime(doc.displayState) &&
+        !/下半场|加时|点球|完场/.test(doc.displayState || '')) {
+        update.displayState = model.displayState
+        update.time = HALF_TIME_MINUTE
+        halfTimeAdvanced = true
+      }
     }
     // 比分/比赛分钟变化也让移动端 2 秒轮询刷新, 用于进行中实时比分展示
-    const scoreChanged = !keepScoreFields && (
+    const scoreChanged = halfTimeAdvanced || (!keepScoreFields && (
       doc.homeScore !== model.homeScore ||
       doc.guestScore !== model.guestScore ||
       doc.homeHalfScore !== model.homeHalfScore ||
       doc.guestHalfScore !== model.guestHalfScore ||
       (doc.time || '') !== (model.time || '') ||
-      (doc.displayState || '') !== (model.displayState || ''))
+      (doc.displayState || '') !== (model.displayState || '')))
 
     let bumpVersion = false
     if (statusAdvanced) {
@@ -342,12 +353,13 @@ async function syncLiveStats(model, internalId, stats, current) {
         patch.guestHalfScore = guestHalfScore
         scoreChanged = true
       }
-      const time = data.time === undefined || data.time === null ? '' : String(data.time)
+      // 中场休息: 分钟固定 45', 避免补时/下半场提前数据让休息期间的时间继续走
+      const displayState = data.displayState ? String(data.displayState) : ''
+      const time = resolveLiveTime(cur, data)
       if (time && time !== (cur.time || '')) {
         patch.time = time
         scoreChanged = true
       }
-      const displayState = data.displayState ? String(data.displayState) : ''
       if (displayState && displayState !== (cur.displayState || '')) {
         patch.displayState = displayState
         scoreChanged = true

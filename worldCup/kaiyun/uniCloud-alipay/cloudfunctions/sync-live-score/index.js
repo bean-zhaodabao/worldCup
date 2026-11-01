@@ -82,11 +82,38 @@ function parseMinute(value) {
   return base + Math.min(extra, 99) / 100
 }
 
+/** 中场休息时展示/存储的比赛分钟: 固定 45', 不跟随补时继续走 */
+const HALF_TIME_MINUTE = "45'"
+
+/** 是否中场休息(displayState 可能是 "中场" / "中场休息") */
+function isHalfTime(displayState) {
+  return /中场|半场休息/.test(String(displayState || ''))
+}
+
 /**
  * 多数据源混用时, 判断 status 数据是否比数据库现有数据旧
  * 防止 status 比单场详情慢 1 分钟时把比分/分钟改回去。
+ * 中场休息是特例: 源站会把分钟从 45+X 重置为 45, 不能当成回退拦截,
+ * 否则页面会一直停留在上半场补时分钟, 中场状态也永远不更新。
  */
 function shouldKeepLiveData(doc, model) {
+  const oldDs = String((doc && doc.displayState) || '')
+  const newDs = String((model && model.displayState) || '')
+  // 进入中场: 允许更新(分钟重置属正常), 由 resolveLiveTime 把分钟固定为 45'
+  // 但已进入下半场/加时/完场后, 再收到中场数据视为源站滞后, 不能退回中场
+  if (isHalfTime(newDs)) {
+    if (/下半场|加时|点球|完场/.test(oldDs)) return true
+    const oldMin = parseMinute(doc && doc.time)
+    if (oldMin !== null && oldMin >= 46) return true
+    return false
+  }
+  // 已在中场, 又收到上半场滞后数据时不允许退回去
+  if (isHalfTime(oldDs)) {
+    const newMin = parseMinute(model && model.time)
+    if (newDs.indexOf('上半场') >= 0) return true
+    if (newMin !== null && newMin < 45) return true
+  }
+
   const oldMin = parseMinute(doc && doc.time)
   const newMin = parseMinute(model && model.time)
   if (oldMin === null || newMin === null) return false
@@ -97,6 +124,14 @@ function shouldKeepLiveData(doc, model) {
     if (newTotal < oldTotal) return true
   }
   return false
+}
+
+/** 中场休息固定展示 45', 其余情况沿用源站分钟 */
+function resolveLiveTime(doc, model) {
+  if (isHalfTime(model && model.displayState)) return HALF_TIME_MINUTE
+  const t = model && model.time
+  if (t === undefined || t === null) return (doc && doc.time) || ''
+  return String(t)
 }
 
 /** 生成变更字段; 无变化返回 null, 避免每 15 秒空写数据库 */
@@ -117,8 +152,9 @@ function buildPatch(doc, model) {
   const guestScore = pick(model.guestScore, doc.guestScore)
   const homeHalfScore = pick(model.homeHalfScore, doc.homeHalfScore)
   const guestHalfScore = pick(model.guestHalfScore, doc.guestHalfScore)
-  const time = pick(model.time, doc.time) || ''
   const displayState = pick(model.displayState, doc.displayState) || ''
+  // 中场休息固定 45', 避免源站补时/下半场提前数据让休息期间的时间继续走
+  const time = resolveLiveTime(doc, model)
 
   const scoreChanged = doc.homeScore !== homeScore ||
     doc.guestScore !== guestScore ||

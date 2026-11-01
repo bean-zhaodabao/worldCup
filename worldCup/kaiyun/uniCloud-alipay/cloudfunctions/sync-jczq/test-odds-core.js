@@ -7,7 +7,8 @@ const {
   round2, parsePankou, mergePankou, combineOdds, lastOf,
   buildSportteryPlays, buildPankouPlays,
   computeResult, resultMultiplier, regularScore, parseLiveTechnic, shouldKeepScore,
-  parseMinute, shouldKeepLiveData
+  parseMinute, shouldKeepLiveData,
+  isHalfTime, resolveLiveTime, HALF_TIME_MINUTE
 } = require('./odds-core')
 
 let pass = 0, fail = 0
@@ -226,6 +227,71 @@ eq(
   '分钟前进允许更新'
 )
 eq(shouldKeepLiveData({ time: '中场', homeScore: 1, guestScore: 0 }, { time: "46'", homeScore: 1, guestScore: 0 }), false, '无分钟时不拦截')
+
+// ==================== 11. 中场休息 ====================
+console.log('\n[11] 中场休息时间不再继续走')
+eq(isHalfTime('中场'), true, '中场 = 中场休息')
+eq(isHalfTime('中场休息'), true, '中场休息 = 中场休息')
+eq(isHalfTime('上半场'), false, '上半场不是中场')
+eq(isHalfTime('下半场'), false, '下半场不是中场')
+eq(isHalfTime(''), false, '空状态不是中场')
+
+eq(
+  shouldKeepLiveData(
+    { time: "45+3'", displayState: '上半场', homeScore: 1, guestScore: 0 },
+    { time: "45'", displayState: '中场', homeScore: 1, guestScore: 0 }
+  ),
+  false,
+  '进入中场时允许更新(分钟重置为45不算回退)'
+)
+eq(
+  resolveLiveTime(
+    { time: "45+3'", displayState: '上半场' },
+    { time: "47'", displayState: '中场' }
+  ),
+  HALF_TIME_MINUTE,
+  '中场休息期间源站分钟继续增长也固定为45'
+)
+eq(
+  resolveLiveTime(
+    { time: "45'", displayState: '中场' },
+    { time: "46'", displayState: '下半场' }
+  ),
+  "46'",
+  '下半场开始后恢复源站分钟'
+)
+eq(
+  shouldKeepLiveData(
+    { time: "45'", displayState: '中场', homeScore: 1, guestScore: 0 },
+    { time: "45+2'", displayState: '上半场', homeScore: 1, guestScore: 0 }
+  ),
+  true,
+  '中场后收到上半场滞后的补时数据不回退'
+)
+eq(
+  shouldKeepLiveData(
+    { time: "45'", displayState: '中场', homeScore: 1, guestScore: 0 },
+    { time: "46'", displayState: '下半场', homeScore: 1, guestScore: 0 }
+  ),
+  false,
+  '中场后进入下半场允许更新'
+)
+eq(
+  shouldKeepLiveData(
+    { time: "46'", displayState: '下半场', homeScore: 1, guestScore: 0 },
+    { time: "45'", displayState: '中场', homeScore: 1, guestScore: 0 }
+  ),
+  true,
+  '已进入下半场时, 详情接口滞后的中场数据不退回中场'
+)
+eq(
+  shouldKeepLiveData(
+    { time: "46'", displayState: '', homeScore: 1, guestScore: 0 },
+    { time: "45'", displayState: '中场', homeScore: 1, guestScore: 0 }
+  ),
+  true,
+  '分钟已过45时, 中场数据视为滞后'
+)
 
 console.log('\n========================================')
 console.log('通过 ' + pass + ' 项, 失败 ' + fail + ' 项')

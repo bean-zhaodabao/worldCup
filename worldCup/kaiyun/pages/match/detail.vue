@@ -16,9 +16,7 @@
         <view class="vs-box">
           <text class="vs" v-if="!isStarted">VS</text>
           <text class="live-score" v-else>{{ scoreText }}</text>
-          <text class="time">
-            {{ isLive ? (match.time || '进行中') : (isStarted ? (match.displayState || '已结束') : formatTime(match.startTime)) }}
-          </text>
+          <text class="time">{{ matchTimeText }}</text>
         </view>
         <view class="team">
           <image :src="match.teamBFlag || '/static/football.png'" mode="aspectFit" class="flag" />
@@ -48,7 +46,7 @@
         </view>
         <view class="live-data-item">
           <text class="live-data-label">比赛时间</text>
-          <text class="live-data-value">{{ match.time || '进行中' }}</text>
+          <text class="live-data-value">{{ isHalfTime ? '中场' : (match.time || '进行中') }}</text>
         </view>
         <view class="live-data-item">
           <text class="live-data-label">数据更新</text>
@@ -286,6 +284,19 @@ const formatTime = (t) => {
   const d = new Date(t)
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0')
 }
+
+/** 是否中场休息: 此时比赛时间应停住, 直接展示"中场" */
+const isHalfTime = computed(() => /中场|半场休息/.test(match.value.displayState || ''))
+
+/** 顶部比赛时间: 进行中显示分钟(中场休息显示"中场"), 完场显示状态, 未开赛显示开赛时间 */
+const matchTimeText = computed(() => {
+  if (isLive.value) {
+    if (isHalfTime.value) return '中场'
+    return match.value.time || '进行中'
+  }
+  if (isStarted.value) return match.value.displayState || '已结束'
+  return formatTime(match.value.startTime)
+})
 
 /** 小类标题 */
 const subTitle = (sub) => sub.name
