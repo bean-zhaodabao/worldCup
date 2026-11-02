@@ -1,0 +1,39 @@
+{
+  "bsonType": "object",
+  "description": "sync-jczq 同步健康状态，固定单文档 _id=main；管理端赛事页与移动端用它判断同步是否停摆",
+  "properties": {
+    "_id": { "bsonType": "string" },
+    "running": {
+      "bsonType": "bool",
+      "title": "本轮是否运行中",
+      "description": "acquireLock 置 true，releaseLock 置 false；超过 2 分钟未释放会被下一轮接管"
+    },
+    "lockAt": {
+      "bsonType": "date",
+      "title": "加锁时间"
+    },
+    "lastRunAt": {
+      "bsonType": "date",
+      "title": "最近一次运行结束时间"
+    },
+    "lastSuccessAt": {
+      "bsonType": "date",
+      "title": "最近一次成功时间",
+      "description": "失败时为 null，管理端优先用该字段判断停摆"
+    },
+    "lastFullOddsAt": {
+      "bsonType": "date",
+      "title": "最近一次全量赔率同步时间",
+      "description": "未开赛玩法全量同步按 4 分钟节流"
+    },
+    "stats": {
+      "bsonType": "object",
+      "title": "最近一轮同步统计"
+    },
+    "error": {
+      "bsonType": "string",
+      "title": "最近一次失败原因",
+      "description": "成功时为 null"
+    }
+  }
+}

@@ -27,8 +27,8 @@ export default defineConfig({
     open: true,
     proxy: {
       '/api': {
-        // target: 'http://worldcup.fumaokitchen.com',
-        target: 'https://env-00jy6sztxfno.dev-hz.cloudbasefunction.cn',
+        // 使用云函数 URL 化自定义域名，避免支付宝云默认域名限流
+        target: 'https://worldcup.fumaokitchen.com',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, '')
       }

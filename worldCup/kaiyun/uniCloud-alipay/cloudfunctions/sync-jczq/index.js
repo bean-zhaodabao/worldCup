@@ -665,6 +665,19 @@ async function retireLegacyGoalsPlays(stats) {
 
 // ==================== 同步锁与状态 ====================
 
+// 支付宝云不会因为 add/set 自动创建集合（只有阿里云会）。
+// 换服务空间后如果忘了建 sync-status，状态写入会一直失败且被 catch 吞掉，
+// 管理端就会误报「定时同步已停摆：暂无同步记录」。这里做一次兜底创建。
+async function ensureSyncStatusCollection() {
+  try {
+    if (typeof db.createCollection === 'function') {
+      await db.createCollection('sync-status')
+    }
+  } catch (e) {
+    // 集合已存在时支付宝云/腾讯云会报错，忽略
+  }
+}
+
 async function acquireLock() {
   try {
     const res = await db.collection('sync-status').doc('main').get()
@@ -680,26 +693,35 @@ async function acquireLock() {
     }
     return { ok: true, lastFullOddsAt: (doc && doc.lastFullOddsAt) || null }
   } catch (e) {
-    // 首次运行无文档
+    // 首次运行无文档, 或集合不存在(换服务空间后常见)
+    await ensureSyncStatusCollection()
     try {
       await db.collection('sync-status').doc('main').set({ running: true, lockAt: new Date() })
-    } catch (e2) { /* ignore */ }
+    } catch (e2) {
+      console.error('sync-status 加锁失败:', e2)
+    }
     return { ok: true, lastFullOddsAt: null }
   }
 }
 
 async function releaseLock(result) {
+  const statusDoc = {
+    running: false,
+    lastRunAt: new Date(),
+    lastSuccessAt: result.error ? null : new Date(),
+    lastFullOddsAt: result.lastFullOddsAt || null,
+    stats: result.stats || null,
+    error: result.error || null
+  }
   try {
-    await db.collection('sync-status').doc('main').set({
-      running: false,
-      lastRunAt: new Date(),
-      lastSuccessAt: result.error ? null : new Date(),
-      lastFullOddsAt: result.lastFullOddsAt || null,
-      stats: result.stats || null,
-      error: result.error || null
-    })
+    await db.collection('sync-status').doc('main').set(statusDoc)
   } catch (e) {
-    console.error('releaseLock error:', e)
+    try {
+      await ensureSyncStatusCollection()
+      await db.collection('sync-status').doc('main').set(statusDoc)
+    } catch (e2) {
+      console.error('releaseLock error:', e2)
+    }
   }
 }
 

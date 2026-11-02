@@ -13,12 +13,20 @@
     <!-- 定时同步停摆告警: sync-jczq 每分钟写一次 sync-status, 超过 5 分钟没更新说明触发器没在跑 -->
     <el-alert v-if="syncStale" type="error" :closable="false" show-icon style="margin-bottom:16px">
       <template #title>
-        定时同步已停摆{{ syncStatus && lastSyncAt ? '：上次同步 ' + fmt(lastSyncAt) + '（' + agoText + '）' : '：暂无同步记录' }}
-        <span v-if="syncStatus && syncStatus.error">，最近一次失败：{{ syncStatus.error }}</span>
+        <template v-if="syncStatusError">无法读取同步状态：{{ syncStatusError }}</template>
+        <template v-else>
+          定时同步已停摆{{ syncStatus && lastSyncAt ? '：上次同步 ' + fmt(lastSyncAt) + '（' + agoText + '）' : '：暂无同步记录' }}
+          <span v-if="syncStatus && syncStatus.error">，最近一次失败：{{ syncStatus.error }}</span>
+        </template>
       </template>
       <template #default>
-        移动端展示「未开赛 + 进行中」赛事，同步停摆会导致手机端赛事不更新。请到 uniCloud 控制台检查
-        <b>sync-jczq</b> 的定时触发器是否仍为 <code>0 */1 * * * * *</code>（换服务空间后需重新注册）。
+        <template v-if="syncStatusError">
+          通常是云数据库缺少 <b>sync-status</b> 集合（换服务空间后需重新创建）。创建集合后点「立即同步」即可写入同步状态。
+        </template>
+        <template v-else>
+          移动端展示「未开赛 + 进行中」赛事，同步停摆会导致手机端赛事不更新。请到 uniCloud 控制台检查
+          <b>sync-jczq</b> 的定时触发器是否仍为 <code>0 */1 * * * * *</code>（换服务空间后需重新注册）。
+        </template>
       </template>
     </el-alert>
 
@@ -126,6 +134,11 @@ const syncStale = computed(() => {
   if (!syncStatusLoaded.value) return false // 未加载完不报错, 避免首屏闪红
   if (!lastSyncAt.value) return true
   return nowTs.value - new Date(lastSyncAt.value).getTime() > SYNC_STALE_MS
+})
+// admin-match 读取 sync-status 失败(集合不存在等)时, 明确提示原因, 不要误报成定时器停摆
+const syncStatusError = computed(() => {
+  const s = syncStatus.value
+  return s && s.available === false ? (s.error || '云数据库 sync-status 集合不可用') : ''
 })
 const agoText = computed(() => {
   if (!lastSyncAt.value) return ''

@@ -19,11 +19,10 @@ exports.main = async (event, context) => {
       const tomorrow = new Date(today)
       tomorrow.setDate(tomorrow.getDate() + 1)
 
-      const [todayOrders, liveMatches, allOrders, settledOrders] = await Promise.all([
+      const [todayOrders, liveMatches, totalOrders] = await Promise.all([
         db.collection('orders').where({ createTime: db.command.gte(today).and(db.command.lt(tomorrow)) }).get(),
         db.collection('matches').where({ status: 'live' }).count(),
-        db.collection('orders').get(),
-        db.collection('orders').where({ status: 'settled' }).get()
+        db.collection('orders').count()
       ])
 
       const todayTotal = (todayOrders.data || []).reduce((sum, o) => sum + o.betAmount, 0)
@@ -36,7 +35,7 @@ exports.main = async (event, context) => {
         todayWin,
         todayProfit: todayTotal - todayWin,
         liveMatches: liveMatches.total,
-        totalOrders: (allOrders.data || []).length
+        totalOrders: totalOrders.total
       })
     }
 

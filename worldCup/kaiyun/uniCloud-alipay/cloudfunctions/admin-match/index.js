@@ -19,9 +19,13 @@ exports.main = async (event, context) => {
     if (method === 'GET' && path.includes('/sync-status')) {
       try {
         const res = await db.collection('sync-status').doc('main').get()
-        return ok((res.data && res.data[0]) || null)
+        const doc = (res.data && res.data[0]) || null
+        // 集合存在但还没有文档: 首次同步尚未跑完
+        return ok(doc || { empty: true, available: true })
       } catch (e) {
-        return ok(null) // 首次运行尚无该文档
+        // 集合不存在(换服务空间后常见)或查询失败, 把原因带回管理端,
+        // 否则前端只能显示"暂无同步记录", 会被误判成定时器停摆
+        return ok({ available: false, error: e.message || String(e) })
       }
     }
 

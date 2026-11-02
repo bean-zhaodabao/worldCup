@@ -72,18 +72,18 @@ const loadList = async () => {
 loadList()
 
 const doReview = async (row, approve) => {
+  const result = await ElMessageBox.prompt(
+    approve ? '确认通过提现 ¥' + Number(row.amount).toFixed(2) + '？通过后冻结金额将扣减，请线下打款。' : '确认驳回提现 ¥' + Number(row.amount).toFixed(2) + '？驳回后金额解冻回用户余额。',
+    approve ? '提现通过' : '提现驳回',
+    {
+      inputPlaceholder: '备注(可选)',
+      inputValue: '',
+      type: approve ? 'warning' : 'error'
+    }
+  ).catch(() => null)
+  if (!result) return
   try {
-    const { value: remark } = await ElMessageBox.prompt(
-      approve ? '确认通过提现 ¥' + Number(row.amount).toFixed(2) + '？通过后冻结金额将扣减，请线下打款。' : '确认驳回提现 ¥' + Number(row.amount).toFixed(2) + '？驳回后金额解冻回用户余额。',
-      approve ? '提现通过' : '提现驳回',
-      {
-        inputPlaceholder: '备注(可选)',
-        inputValue: '',
-        type: approve ? 'warning' : 'error'
-      }
-    ).catch(() => null)
-    if (remark === null && remark === undefined) return
-    await reviewWithdraw(row._id, approve, remark || '')
+    await reviewWithdraw(row._id, approve, result.value || '')
     ElMessage.success(approve ? '已通过' : '已驳回')
     loadList()
   } catch (e) {
