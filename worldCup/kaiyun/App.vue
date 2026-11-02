@@ -1,16 +1,28 @@
 <script>
+import { installCloudAuthGuard, isTokenExpired, forceLogout } from '@/utils/cloudAuth.js'
+
+const LOGIN_PAGE = '/pages/login/login'
+
 export default {
   onLaunch: function () {
     console.log('足球彩票 H5 启动')
-    // 检查登录状态
+    // 拦截所有云函数返回的 401，统一清登录态并跳登录页
+    installCloudAuthGuard()
+
+    // 冷启动检查：未登录直接去登录页，token 已过期则提示后跳转
     const token = uni.getStorageSync('token')
     if (!token) {
-      // 未登录跳转登录页
-      // uni.reLaunch({ url: '/pages/login/login' })
+      uni.reLaunch({ url: LOGIN_PAGE })
+    } else if (isTokenExpired(token)) {
+      forceLogout('登录已过期，请重新登录')
     }
   },
   onShow: function () {
-    console.log('App Show')
+    // 回到前台时再检查一次，避免后台停留超过 24 小时后继续使用旧 token
+    const token = uni.getStorageSync('token')
+    if (token && isTokenExpired(token)) {
+      forceLogout('登录已过期，请重新登录')
+    }
   },
   onHide: function () {
     console.log('App Hide')
