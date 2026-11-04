@@ -313,9 +313,11 @@ const callLive = async (data) => {
   try {
     const res = await uniCloud.callFunction({ name: 'user-live', data })
     if (res.result && res.result.code === 0) return res.result.data || {}
+    // 失败时不要静默：控制台能看到是超时、未登录还是云函数报错
+    console.warn('[user-live] ' + (data && data.action) + ' 返回异常:', res.result && res.result.message)
     return null
   } catch (e) {
-    console.warn('直播接口调用失败:', e)
+    console.warn('[user-live] ' + (data && data.action) + ' 调用失败:', e)
     return null
   }
 }

@@ -32,6 +32,9 @@ const {
 } = require('./live-core')
 
 const BASE = 'https://www.dnymrhz.com'
+// 只拉足球：type=1 会返回全部足球直播间，避免首页 60 条上限把足球房间挤掉
+// （/live 默认混合所有类型且只返回第一页 60 条，实测会漏掉 5 个足球房间）
+const LIST_URL = BASE + '/live?type=1'
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/152 Safari/537.36'
 const LIST_TTL_MS = 2 * 60 * 1000
 const STALE_MAX_MS = 10 * 60 * 1000
@@ -114,11 +117,14 @@ async function getLiveData(force) {
 
   liveInflight = (async () => {
     try {
-      const html = await fetchWithRetry(BASE + '/live')
+      const html = await fetchWithRetry(LIST_URL)
       const pageProps = parseNextData(html)
       const entries = buildLiveEntries(pageProps)
       if (!entries.length) {
         console.warn('[user-live] /live 未解析到任何直播场次，斗球站点可能已改版')
+      } else {
+        const roomCount = entries.reduce((n, e) => n + e.rooms.length, 0)
+        console.log('[user-live] /live 抓取成功: 场次=' + entries.length + ' 直播间=' + roomCount)
       }
       liveCache = { fetchedAt: Date.now(), entries }
       return liveCache
@@ -209,6 +215,9 @@ async function actionList(event) {
 
   const page = await getLiveData()
   const hits = matchMatches(matches, page.entries, Date.now())
+  if (!hits.length) {
+    console.log('[user-live] list: 我方赛事=' + matches.length + ' 斗球场次=' + page.entries.length + ' 匹配成功=0')
+  }
   const lives = []
   for (const hit of hits) {
     const usableRooms = hit.entry.rooms.filter(r => r.status === 1 || r.hasPlayAddr)
@@ -271,6 +280,14 @@ async function actionLive() {
 
   // 只有能匹配上我方赛事的直播源才展示，避免出现系统里没有的赛事
   const matchedEntries = filterMatchedEntries(myMatches, footballEntries, nowMs)
+
+  // 排查用日志：能直接看出「斗球有直播源但没有一场能匹配我方赛事」
+  if (!matchedEntries.length) {
+    const titles = footballEntries.map(e => e.leagueName + ' ' + e.hostTeamName + ' vs ' + e.guestTeamName).slice(0, 20)
+    console.warn('[user-live] 足球直播=' + footballEntries.length +
+      ' 我方临近赛事=' + myMatches.length +
+      ' 匹配成功=0；斗球当前直播: ' + titles.join(' | '))
+  }
 
   const groups = []
   for (const entry of matchedEntries) {

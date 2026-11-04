@@ -1,1 +1,10 @@
-{ "name": "user-live", "version": "1.0.0", "dependencies": {} }
+{
+  "name": "user-live",
+  "version": "1.0.0",
+  "dependencies": {},
+  "cloudfunction-config": {
+    "timeout": 30,
+    "memorySize": 256,
+    "triggers": []
+  }
+}
