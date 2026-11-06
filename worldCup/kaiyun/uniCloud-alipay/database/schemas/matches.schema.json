@@ -20,8 +20,8 @@
     "status": {
       "bsonType": "string",
       "title": "赛事状态",
-      "enum": ["upcoming", "live", "finished", "settled", "cancelled"],
-      "description": "未开始->进行中->已结束->已结算；cancelled=赛事取消(退款)",
+      "enum": ["upcoming", "live", "finished", "settled", "cancelled", "expired"],
+      "description": "未开始->进行中->已结束->已结算；cancelled=赛事取消(退款)；expired=赛事滑出同步窗口且未拿到赛果(不自动结算)",
       "default": "upcoming"
     },
     "online": {

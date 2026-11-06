@@ -3,6 +3,11 @@
 const db = uniCloud.database()
 const { ok, err, verifyToken } = require('./utils')
 
+// 与 user-match / sync-live-score 保持一致: 只有开赛 6 小时内的 live 才算真正进行中。
+// 列表接口只拉 today/next 窗口, 赛事滑出窗口后不会再更新, 若最后状态是 live
+// 会永久留在库里, 仪表盘不能把这些僵尸场次算成"进行中"。
+const LIVE_LOOKBACK_MS = 6 * 60 * 60 * 1000
+
 exports.main = async (event, context) => {
   const token = (event.headers && (event.headers.authorization || event.headers.Authorization || '')).replace('Bearer ', '')
   const admin = await verifyToken(db, token)
@@ -21,7 +26,12 @@ exports.main = async (event, context) => {
 
       const [todayOrders, liveMatches, totalOrders] = await Promise.all([
         db.collection('orders').where({ createTime: db.command.gte(today).and(db.command.lt(tomorrow)) }).get(),
-        db.collection('matches').where({ status: 'live' }).count(),
+        db.collection('matches').where({
+          status: 'live',
+          online: db.command.neq(false),
+          deleted: db.command.neq(true),
+          startTime: db.command.gt(new Date(Date.now() - LIVE_LOOKBACK_MS))
+        }).count(),
         db.collection('orders').count()
       ])
 

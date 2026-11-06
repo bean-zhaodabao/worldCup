@@ -63,6 +63,8 @@ function fetchJson(url, retries) {
 function mapStatus(model) {
   const ds = model.displayState || ''
   if (ds.indexOf('取消') >= 0) return 'cancelled'
+  // 推迟/延期/中断/腰斩不是进行中，避免状态接口把这类场次当成 live 写回库
+  if (/推迟|延期|中断|腰斩/.test(ds)) return 'upcoming'
   const state = model.matchState !== undefined && model.matchState !== null ? model.matchState : model.status
   if (state === -1 || ds.indexOf('完场') >= 0) return 'finished'
   if (state === 0 || ds.indexOf('未开始') >= 0) return 'upcoming'

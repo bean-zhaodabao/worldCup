@@ -41,6 +41,9 @@ const PANKOU_COMPANIES = [8, 12, 14]
 const ODDS_SYNC_CONCURRENCY = 10
 const STALE_MS = 10 * 60 * 1000 // 数据超过10分钟未更新则移动端暂停投注
 const ZOMBIE_GRACE_MS = 6 * 60 * 60 * 1000 // 开赛后 6 小时仍停留在"未开始"的赛事视为僵尸场次
+// 开赛超过 12 小时仍停留在"进行中"的赛事视为僵尸场次。列表接口只拉 today/next 窗口,
+// 赛事滑出窗口后不会再被更新, 否则会永久计入后台"进行中赛事"。
+const LIVE_STALE_GRACE_MS = 12 * 60 * 60 * 1000
 const FULL_ODDS_INTERVAL_MS = 4 * 60 * 1000 // 未开赛玩法全量同步间隔(定时器每分钟触发)
 // 重要: vipc 的 pankou 接口是赛前盘(开赛后不更新), 不能直接用于滚球下注。
 // 接入真正的实时滚球赔率源并替换 syncLivePankou 后, 才可置为 true。
@@ -106,6 +109,9 @@ const STATUS_RANK = { upcoming: 0, live: 1, finished: 2, settled: 3, cancelled: 
 function mapStatus(model) {
   const ds = model.displayState || ''
   if (ds.indexOf('取消') >= 0) return 'cancelled'
+  // 推迟/延期/中断/腰斩不是进行中。否则会落到最后的 live 兜底，
+  // 赛事滑出 today/next 窗口后就永远停在进行中。
+  if (/推迟|延期|中断|腰斩/.test(ds)) return 'upcoming'
   if (model.status === -1 || ds.indexOf('完场') >= 0) return 'finished'
   if (model.status === 0 || ds.indexOf('未开始') >= 0) return 'upcoming'
   return 'live'
@@ -731,7 +737,7 @@ async function doSync(lastFullOddsAt, forceFull) {
   const stats = {
     matchesAdded: 0, matchesUpdated: 0, playsAdded: 0, playsUpdated: 0,
     oddsChangedMatches: 0, settledOrders: 0, refunded: 0, pendingPlays: 0,
-    expiredMatches: 0, legacyGoalsStopped: 0,
+    expiredMatches: 0, staleLiveExpired: 0, legacyGoalsStopped: 0,
     liveMatchesSynced: 0, liveStatsSynced: 0, livePlaysStopped: 0, livePaused: 0, fullOddsSynced: false,
     errors: []
   }
@@ -908,6 +914,36 @@ async function doSync(lastFullOddsAt, forceFull) {
       }
     } catch (e) {
       stats.errors.push('过期赛事处理失败 ' + m._id + ': ' + e.message)
+    }
+  }
+
+  // 9. 清理僵尸进行中赛事: 开赛超过 12 小时仍停在 live 的场次
+  //    和 upcoming 僵尸场次同理, 赛事滑出同步窗口后不会再收到完场状态;
+  //    标成 expired 而不是 finished, 避免拿最后一次进行中比分当完场比分自动结算。
+  const staleLiveRes = await db.collection('matches')
+    .where({ status: 'live', deleted: cmd.neq(true), startTime: cmd.lt(new Date(Date.now() - LIVE_STALE_GRACE_MS)) })
+    .limit(200)
+    .get()
+  for (const m of staleLiveRes.data || []) {
+    try {
+      // 串关存 matchIds 数组, 单关历史上存过 matchId, 两个都查
+      const byArr = await db.collection('orders').where({ matchIds: cmd.in([m._id]) }).count()
+      const bySingle = await db.collection('orders').where({ matchId: m._id }).count()
+      const orderCount = byArr.total + bySingle.total
+      await db.collection('matches').doc(m._id).update({ status: 'expired', updateTime: new Date() })
+      stats.staleLiveExpired++
+      if (orderCount > 0) {
+        // 长时间停在进行中且仍有订单 -> 需要人工核对比分后处理, 单独告警
+        stats.errors.push('进行中赛事超时但存在 ' + orderCount + ' 笔订单, 需人工处理: ' + (m.teamA || '') + ' vs ' + (m.teamB || '') + ' (' + m._id + ')')
+        await db.collection('operation-logs').add({
+          adminId: 'system', adminName: 'system',
+          action: 'match_stale_live_expired', targetType: 'matches', targetId: m._id,
+          detail: '赛事长时间停留在进行中(最后状态: ' + (m.displayState || '-') + ')且存在 ' + orderCount + ' 笔订单, 已标记过期, 待人工核对: ' + (m.teamA || '') + ' vs ' + (m.teamB || ''),
+          createTime: new Date()
+        })
+      }
+    } catch (e) {
+      stats.errors.push('僵尸进行中赛事处理失败 ' + m._id + ': ' + e.message)
     }
   }
 
