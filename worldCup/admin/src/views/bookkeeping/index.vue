@@ -167,7 +167,7 @@
 
         <el-form-item label="总盈亏">
           <span class="total-profit" :class="profitClass(computedTotal)">¥{{ money(computedTotal) }}</span>
-          <span class="formula-tip">下注金额 + 未对冲盈亏 + 对冲盈亏</span>
+          <span class="formula-tip">下注金额 - 对冲金额 + 未对冲盈亏 + 对冲返现</span>
         </el-form-item>
 
         <el-form-item label="备注">
@@ -256,7 +256,12 @@ const computedHedgeProfit = computed(() =>
   round2(Number(form.hedgeRebate || 0) - Number(form.hedgeAmount || 0))
 )
 const computedTotal = computed(() =>
-  round2(Number(form.betAmount || 0) + Number(form.unhedgedProfit || 0) + computedHedgeProfit.value)
+  round2(
+    Number(form.betAmount || 0) -
+      Number(form.hedgeAmount || 0) +
+      Number(form.unhedgedProfit || 0) +
+      Number(form.hedgeRebate || 0)
+  )
 )
 const overHedged = computed(() => Number(form.hedgeAmount || 0) > Number(form.betAmount || 0))
 
@@ -273,7 +278,12 @@ const unhedgedAmountOf = (row) => {
 }
 const hedgeProfitOf = (row) => round2(Number(row.hedgeRebate || 0) - Number(row.hedgeAmount || 0))
 const totalProfitOf = (row) =>
-  round2(Number(row.betAmount || 0) + Number(row.unhedgedProfit || 0) + hedgeProfitOf(row))
+  round2(
+    Number(row.betAmount || 0) -
+      Number(row.hedgeAmount || 0) +
+      Number(row.unhedgedProfit || 0) +
+      Number(row.hedgeRebate || 0)
+  )
 
 const profitClass = (v) => {
   const n = Number(v || 0)
