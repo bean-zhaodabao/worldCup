@@ -64,7 +64,7 @@
           <template #default="{ row }">{{ money(row.hedgeAmount) }}</template>
         </el-table-column>
         <el-table-column label="未对冲金额" width="115" align="right">
-          <template #default="{ row }">{{ money(row.unhedgedAmount) }}</template>
+          <template #default="{ row }">{{ money(unhedgedAmountOf(row)) }}</template>
         </el-table-column>
         <el-table-column label="未对冲盈亏" width="115" align="right">
           <template #default="{ row }">
@@ -74,9 +74,14 @@
         <el-table-column label="对冲返现" width="110" align="right">
           <template #default="{ row }">{{ money(row.hedgeRebate) }}</template>
         </el-table-column>
+        <el-table-column label="对冲盈亏" width="115" align="right">
+          <template #default="{ row }">
+            <span :class="profitClass(hedgeProfitOf(row))">{{ money(hedgeProfitOf(row)) }}</span>
+          </template>
+        </el-table-column>
         <el-table-column label="总盈亏" width="115" align="right">
           <template #default="{ row }">
-            <b :class="profitClass(row.totalProfit)">{{ money(row.totalProfit) }}</b>
+            <b :class="profitClass(totalProfitOf(row))">{{ money(totalProfitOf(row)) }}</b>
           </template>
         </el-table-column>
         <el-table-column prop="remark" label="备注" min-width="140" show-overflow-tooltip />
@@ -155,9 +160,14 @@
           </el-col>
         </el-row>
 
+        <el-form-item label="对冲盈亏">
+          <span class="hedge-profit" :class="profitClass(computedHedgeProfit)">¥{{ money(computedHedgeProfit) }}</span>
+          <span class="formula-tip">对冲返现 - 对冲金额</span>
+        </el-form-item>
+
         <el-form-item label="总盈亏">
           <span class="total-profit" :class="profitClass(computedTotal)">¥{{ money(computedTotal) }}</span>
-          <span class="formula-tip">未对冲盈亏 + 对冲返现</span>
+          <span class="formula-tip">下注金额 + 未对冲盈亏 + 对冲盈亏</span>
         </el-form-item>
 
         <el-form-item label="备注">
@@ -238,16 +248,32 @@ const rules = {
   hedgeAmount: [{ required: true, message: '请输入对冲金额', trigger: 'blur' }]
 }
 
-const computedUnhedged = computed(() =>
-  round2(Number(form.betAmount || 0) - Number(form.hedgeAmount || 0))
+const computedUnhedged = computed(() => {
+  const n = round2(Number(form.betAmount || 0) - Number(form.hedgeAmount || 0))
+  return n > 0 ? n : 0
+})
+const computedHedgeProfit = computed(() =>
+  round2(Number(form.hedgeRebate || 0) - Number(form.hedgeAmount || 0))
 )
 const computedTotal = computed(() =>
-  round2(Number(form.unhedgedProfit || 0) + Number(form.hedgeRebate || 0))
+  round2(Number(form.betAmount || 0) + Number(form.unhedgedProfit || 0) + computedHedgeProfit.value)
 )
 const overHedged = computed(() => Number(form.hedgeAmount || 0) > Number(form.betAmount || 0))
 
 const round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100
 const money = (v) => Number(v || 0).toFixed(2)
+
+const unhedgedAmountOf = (row) => {
+  const hasStored = row.unhedgedAmount !== undefined && row.unhedgedAmount !== null && row.unhedgedAmount !== ''
+  const raw = hasStored
+    ? Number(row.unhedgedAmount)
+    : Number(row.betAmount || 0) - Number(row.hedgeAmount || 0)
+  const n = round2(raw)
+  return n > 0 ? n : 0
+}
+const hedgeProfitOf = (row) => round2(Number(row.hedgeRebate || 0) - Number(row.hedgeAmount || 0))
+const totalProfitOf = (row) =>
+  round2(Number(row.betAmount || 0) + Number(row.unhedgedProfit || 0) + hedgeProfitOf(row))
 
 const profitClass = (v) => {
   const n = Number(v || 0)
@@ -420,6 +446,11 @@ onMounted(loadList)
 
   .total-profit {
     font-size: 18px;
+    font-weight: 600;
+  }
+
+  .hedge-profit {
+    font-size: 16px;
     font-weight: 600;
   }
 

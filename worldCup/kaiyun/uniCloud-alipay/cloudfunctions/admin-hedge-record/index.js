@@ -103,12 +103,17 @@ function calcSummary(records) {
     count: records.length
   }
   records.forEach(r => {
-    summary.betTotal += Number(r.betAmount) || 0
-    summary.hedgeTotal += Number(r.hedgeAmount) || 0
-    summary.unhedgedTotal += Number(r.unhedgedAmount) || 0
+    const betAmount = Number(r.betAmount) || 0
+    const hedgeAmount = Number(r.hedgeAmount) || 0
+    const storedUnhedged = Number(r.unhedgedAmount)
+    const hasStored = r.unhedgedAmount !== undefined && r.unhedgedAmount !== null && r.unhedgedAmount !== ''
+    const unhedgedAmount = hasStored && Number.isFinite(storedUnhedged) ? storedUnhedged : betAmount - hedgeAmount
+    summary.betTotal += betAmount
+    summary.hedgeTotal += hedgeAmount
+    summary.unhedgedTotal += Math.max(0, unhedgedAmount)
     summary.unhedgedProfitTotal += Number(r.unhedgedProfit) || 0
     summary.rebateTotal += Number(r.hedgeRebate) || 0
-    summary.totalProfit += Number(r.totalProfit) || 0
+    summary.totalProfit += betAmount + (Number(r.unhedgedProfit) || 0) + (Number(r.hedgeRebate) || 0) - hedgeAmount
   })
   Object.keys(summary).forEach(k => {
     if (k !== 'count') summary[k] = round2(summary[k])
@@ -131,7 +136,7 @@ function buildRecord(body, admin) {
     unhedgedAmount: round2(betAmount - hedgeAmount),
     unhedgedProfit,
     hedgeRebate,
-    totalProfit: round2(unhedgedProfit + hedgeRebate),
+    totalProfit: round2(betAmount + unhedgedProfit + hedgeRebate - hedgeAmount),
     remark: trim(body.remark),
     operatorId: admin._id,
     operatorName: admin.username,
@@ -218,7 +223,7 @@ exports.main = async (event, context) => {
         unhedgedAmount: round2(betAmount - hedgeAmount),
         unhedgedProfit,
         hedgeRebate,
-        totalProfit: round2(unhedgedProfit + hedgeRebate),
+        totalProfit: round2(betAmount + unhedgedProfit + hedgeRebate - hedgeAmount),
         remark: body.remark !== undefined ? trim(body.remark) : (existing.remark || ''),
         updateTime: new Date()
       }
