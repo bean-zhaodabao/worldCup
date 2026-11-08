@@ -66,17 +66,22 @@
         <el-table-column label="未对冲金额" width="115" align="right">
           <template #default="{ row }">{{ money(unhedgedAmountOf(row)) }}</template>
         </el-table-column>
-        <el-table-column label="未对冲盈亏" width="115" align="right">
+        <el-table-column label="未对冲返现" width="115" align="right">
           <template #default="{ row }">
-            <span :class="profitClass(row.unhedgedProfit)">{{ money(row.unhedgedProfit) }}</span>
+            <span :class="profitClass(unhedgedRebateOf(row))">{{ money(unhedgedRebateOf(row)) }}</span>
           </template>
         </el-table-column>
         <el-table-column label="对冲返现" width="110" align="right">
           <template #default="{ row }">{{ money(row.hedgeRebate) }}</template>
         </el-table-column>
+        <el-table-column label="未对冲盈亏" width="115" align="right">
+          <template #default="{ row }">
+            <span :class="profitClass(unhedgedProfitOf(row))">{{ money(unhedgedProfitOf(row)) }}</span>
+          </template>
+        </el-table-column>
         <el-table-column label="对冲盈亏" width="115" align="right">
           <template #default="{ row }">
-            <span :class="profitClass(hedgeProfitOf(row))">{{ money(hedgeProfitOf(row)) }}</span>
+            <span>{{ money(hedgeProfitOf(row)) }}</span>
           </template>
         </el-table-column>
         <el-table-column label="总盈亏" width="115" align="right">
@@ -149,8 +154,8 @@
 
         <el-row :gutter="12">
           <el-col :span="12">
-            <el-form-item label="未对冲盈亏">
-              <el-input-number v-model="form.unhedgedProfit" :precision="2" :controls="false" style="width:100%" />
+            <el-form-item label="未对冲返现">
+              <el-input-number v-model="form.unhedgedRebate" :precision="2" :controls="false" style="width:100%" />
             </el-form-item>
           </el-col>
           <el-col :span="12">
@@ -160,14 +165,19 @@
           </el-col>
         </el-row>
 
+        <el-form-item label="未对冲盈亏">
+          <span class="unhedged-profit" :class="profitClass(computedUnhedgedProfit)">¥{{ money(computedUnhedgedProfit) }}</span>
+          <span class="formula-tip">未对冲金额 - 未对冲返现</span>
+        </el-form-item>
+
         <el-form-item label="对冲盈亏">
-          <span class="hedge-profit" :class="profitClass(computedHedgeProfit)">¥{{ money(computedHedgeProfit) }}</span>
+          <span class="hedge-profit">¥{{ money(computedHedgeProfit) }}</span>
           <span class="formula-tip">对冲返现 - 对冲金额</span>
         </el-form-item>
 
         <el-form-item label="总盈亏">
           <span class="total-profit" :class="profitClass(computedTotal)">¥{{ money(computedTotal) }}</span>
-          <span class="formula-tip">下注金额 - 对冲金额 + 未对冲盈亏 + 对冲返现</span>
+          <span class="formula-tip">下注金额 - 对冲金额 - 未对冲返现 + 对冲返现</span>
         </el-form-item>
 
         <el-form-item label="备注">
@@ -208,7 +218,7 @@ const summary = reactive({
   betTotal: 0,
   hedgeTotal: 0,
   unhedgedTotal: 0,
-  unhedgedProfitTotal: 0,
+  unhedgedRebateTotal: 0,
   rebateTotal: 0,
   totalProfit: 0
 })
@@ -217,7 +227,7 @@ const summaryCards = computed(() => [
   { key: 'betTotal', label: '下注合计', value: summary.betTotal },
   { key: 'hedgeTotal', label: '对冲合计', value: summary.hedgeTotal },
   { key: 'unhedgedTotal', label: '未对冲合计', value: summary.unhedgedTotal },
-  { key: 'unhedgedProfitTotal', label: '未对冲盈亏', value: summary.unhedgedProfitTotal, profit: true },
+  { key: 'unhedgedRebateTotal', label: '未对冲返现', value: summary.unhedgedRebateTotal, profit: true },
   { key: 'rebateTotal', label: '对冲返现', value: summary.rebateTotal },
   { key: 'totalProfit', label: '总盈亏', value: summary.totalProfit, profit: true }
 ])
@@ -235,7 +245,7 @@ const defaultForm = () => ({
   platform: '',
   betAmount: 0,
   hedgeAmount: 0,
-  unhedgedProfit: 0,
+  unhedgedRebate: 0,
   hedgeRebate: 0,
   remark: ''
 })
@@ -252,14 +262,17 @@ const computedUnhedged = computed(() => {
   const n = round2(Number(form.betAmount || 0) - Number(form.hedgeAmount || 0))
   return n > 0 ? n : 0
 })
+const computedUnhedgedProfit = computed(() =>
+  round2(computedUnhedged.value - Number(form.unhedgedRebate || 0))
+)
 const computedHedgeProfit = computed(() =>
   round2(Number(form.hedgeRebate || 0) - Number(form.hedgeAmount || 0))
 )
 const computedTotal = computed(() =>
   round2(
     Number(form.betAmount || 0) -
-      Number(form.hedgeAmount || 0) +
-      Number(form.unhedgedProfit || 0) +
+      Number(form.hedgeAmount || 0) -
+      Number(form.unhedgedRebate || 0) +
       Number(form.hedgeRebate || 0)
   )
 )
@@ -276,12 +289,14 @@ const unhedgedAmountOf = (row) => {
   const n = round2(raw)
   return n > 0 ? n : 0
 }
+const unhedgedRebateOf = (row) => Number(row.unhedgedRebate ?? row.unhedgedProfit ?? 0)
+const unhedgedProfitOf = (row) => round2(unhedgedAmountOf(row) - unhedgedRebateOf(row))
 const hedgeProfitOf = (row) => round2(Number(row.hedgeRebate || 0) - Number(row.hedgeAmount || 0))
 const totalProfitOf = (row) =>
   round2(
     Number(row.betAmount || 0) -
-      Number(row.hedgeAmount || 0) +
-      Number(row.unhedgedProfit || 0) +
+      Number(row.hedgeAmount || 0) -
+      unhedgedRebateOf(row) +
       Number(row.hedgeRebate || 0)
   )
 
@@ -364,7 +379,7 @@ const openEdit = (row) => {
     platform: row.platform || '',
     betAmount: Number(row.betAmount || 0),
     hedgeAmount: Number(row.hedgeAmount || 0),
-    unhedgedProfit: Number(row.unhedgedProfit || 0),
+    unhedgedRebate: unhedgedRebateOf(row),
     hedgeRebate: Number(row.hedgeRebate || 0),
     remark: row.remark || ''
   })
@@ -387,7 +402,7 @@ const submit = async () => {
       platform: form.platform,
       betAmount: Number(form.betAmount || 0),
       hedgeAmount: Number(form.hedgeAmount || 0),
-      unhedgedProfit: Number(form.unhedgedProfit || 0),
+      unhedgedRebate: Number(form.unhedgedRebate || 0),
       hedgeRebate: Number(form.hedgeRebate || 0),
       remark: form.remark
     }
@@ -459,7 +474,8 @@ onMounted(loadList)
     font-weight: 600;
   }
 
-  .hedge-profit {
+  .hedge-profit,
+  .unhedged-profit {
     font-size: 16px;
     font-weight: 600;
   }

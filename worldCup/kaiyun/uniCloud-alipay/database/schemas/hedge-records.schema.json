@@ -30,10 +30,10 @@
       "title": "未对冲金额",
       "description": "下注金额 - 对冲金额，由服务端计算"
     },
-    "unhedgedProfit": {
+    "unhedgedRebate": {
       "bsonType": "double",
-      "title": "未对冲盈亏",
-      "description": "可正可负，手工录入"
+      "title": "未对冲返现",
+      "description": "未对冲部分给用户的返现，手工录入"
     },
     "hedgeRebate": {
       "bsonType": "double",
@@ -43,7 +43,7 @@
     "totalProfit": {
       "bsonType": "double",
       "title": "总盈亏",
-      "description": "未对冲盈亏 + 对冲返现，由服务端计算"
+      "description": "下注金额 - 对冲金额 - 未对冲返现 + 对冲返现，由服务端计算"
     },
     "remark": {
       "bsonType": "string",

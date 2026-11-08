@@ -97,7 +97,7 @@ function calcSummary(records) {
     betTotal: 0,
     hedgeTotal: 0,
     unhedgedTotal: 0,
-    unhedgedProfitTotal: 0,
+    unhedgedRebateTotal: 0,
     rebateTotal: 0,
     totalProfit: 0,
     count: records.length
@@ -111,9 +111,10 @@ function calcSummary(records) {
     summary.betTotal += betAmount
     summary.hedgeTotal += hedgeAmount
     summary.unhedgedTotal += Math.max(0, unhedgedAmount)
-    summary.unhedgedProfitTotal += Number(r.unhedgedProfit) || 0
+    const unhedgedRebate = pickUnhedgedRebate(r)
+    summary.unhedgedRebateTotal += unhedgedRebate
     summary.rebateTotal += Number(r.hedgeRebate) || 0
-    summary.totalProfit += betAmount - hedgeAmount + (Number(r.unhedgedProfit) || 0) + (Number(r.hedgeRebate) || 0)
+    summary.totalProfit += betAmount - hedgeAmount - unhedgedRebate + (Number(r.hedgeRebate) || 0)
   })
   Object.keys(summary).forEach(k => {
     if (k !== 'count') summary[k] = round2(summary[k])
@@ -121,10 +122,17 @@ function calcSummary(records) {
   return summary
 }
 
+function pickUnhedgedRebate(record) {
+  if (!record) return 0
+  if (record.unhedgedRebate !== undefined && record.unhedgedRebate !== null) return Number(record.unhedgedRebate) || 0
+  // 兼容旧数据字段 unhedgedProfit
+  return Number(record.unhedgedProfit) || 0
+}
+
 function buildRecord(body, admin) {
   const betAmount = parseAmount(body.betAmount, '下注金额', false)
   const hedgeAmount = parseAmount(body.hedgeAmount, '对冲金额', false)
-  const unhedgedProfit = parseAmount(body.unhedgedProfit, '未对冲盈亏', true)
+  const unhedgedRebate = parseAmount(body.unhedgedRebate !== undefined ? body.unhedgedRebate : body.unhedgedProfit, '未对冲返现', true)
   const hedgeRebate = parseAmount(body.hedgeRebate, '对冲返现', true)
 
   return {
@@ -134,9 +142,9 @@ function buildRecord(body, admin) {
     betAmount,
     hedgeAmount,
     unhedgedAmount: round2(betAmount - hedgeAmount),
-    unhedgedProfit,
+    unhedgedRebate,
     hedgeRebate,
-    totalProfit: round2(betAmount - hedgeAmount + unhedgedProfit + hedgeRebate),
+    totalProfit: round2(betAmount - hedgeAmount - unhedgedRebate + hedgeRebate),
     remark: trim(body.remark),
     operatorId: admin._id,
     operatorName: admin.username,
@@ -211,7 +219,15 @@ exports.main = async (event, context) => {
 
       const betAmount = parseAmount(body.betAmount !== undefined ? body.betAmount : existing.betAmount, '下注金额', false)
       const hedgeAmount = parseAmount(body.hedgeAmount !== undefined ? body.hedgeAmount : existing.hedgeAmount, '对冲金额', false)
-      const unhedgedProfit = parseAmount(body.unhedgedProfit !== undefined ? body.unhedgedProfit : existing.unhedgedProfit, '未对冲盈亏', true)
+      const unhedgedRebate = parseAmount(
+        body.unhedgedRebate !== undefined
+          ? body.unhedgedRebate
+          : body.unhedgedProfit !== undefined
+            ? body.unhedgedProfit
+            : pickUnhedgedRebate(existing),
+        '未对冲返现',
+        true
+      )
       const hedgeRebate = parseAmount(body.hedgeRebate !== undefined ? body.hedgeRebate : existing.hedgeRebate, '对冲返现', true)
 
       const updateData = {
@@ -221,9 +237,9 @@ exports.main = async (event, context) => {
         betAmount,
         hedgeAmount,
         unhedgedAmount: round2(betAmount - hedgeAmount),
-        unhedgedProfit,
+        unhedgedRebate,
         hedgeRebate,
-        totalProfit: round2(betAmount - hedgeAmount + unhedgedProfit + hedgeRebate),
+        totalProfit: round2(betAmount - hedgeAmount - unhedgedRebate + hedgeRebate),
         remark: body.remark !== undefined ? trim(body.remark) : (existing.remark || ''),
         updateTime: new Date()
       }
@@ -236,7 +252,7 @@ exports.main = async (event, context) => {
         beforeData: {
           betAmount: existing.betAmount,
           hedgeAmount: existing.hedgeAmount,
-          unhedgedProfit: existing.unhedgedProfit,
+          unhedgedRebate: pickUnhedgedRebate(existing),
           hedgeRebate: existing.hedgeRebate,
           totalProfit: existing.totalProfit
         },
